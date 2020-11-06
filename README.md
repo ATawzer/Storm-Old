@@ -1,7 +1,7 @@
 # The Storm
 A Spotify App designed for exhaustive music discovery. Using a set of user-defined playlists, The Storm will scour the Spotify library for all the new releases from the artists of that playlist. There is no following or manual selection needed from the user, just a playlist of the music they already like. All releases within a given window will then be sent directly to the output playlist the user desires, ready for listening.
 
-# Motivation
+# Motivation and The Storm's Value to music Lovers
 The Storm is titled after the massive amounts of new music being added and listened to on Spotify everyday. This Repo is dedicated to giving users a way to navigate through that storm and find the music they want from the artists and playlists they already frequent all while requiring as little input from the user as possible. However, The Storm isn’t perfect and can be reasonably intimidating itself. Continue through the readme to determine if the Storm is a good fit for your musical listening needs.
 
 Spotify currently employs many different ways of delivering users new music. Here is an overview of the current ways users could find new music:
@@ -31,12 +31,7 @@ These are mostly effective ways of finding new music. However, particularly in n
 
 # Setup and Usage
 
-To get started, you will need a few pieces of information. The .ipynb notebook titled Storm Notebook has a cell dedicated to setting this information up. As a user of the storm I wanted to share some sample visuals to track how useful the storm has been to me. Ove the course of its creation I have tried out 60,000+ tracks across 1,400+ artists all orchestrated using the storm. 
-
-
-
-I almost always know and listen to songs before any of my friends or family, even the true fans of certain artists. I also know I won’t ever miss the best music out there from my favorite artists.
-
+To get started, you will need a few pieces of information. The .ipynb notebook titled Storm Notebook has a cell dedicated to setting this information up. 
 
 ## 1. User Id 
 The first and arguably most important is your user id, which can be found by navigating to your profile and clicking the three dots icon. Then, navigate to Share -> Copy Spotify URI and you should be presented with something like the following:
@@ -65,6 +60,15 @@ To start a new storm or refresh your artist list simply change the name of the s
 
 ** Special Note **
 Make sure you change the name of the storm the first time around. Do this anytime you want to change the artists you are tracking. Metadata and API acceleration is stored to this name and embedded into the .csv’s that store your run data.
+
+## 5. Monitor Usage
+As a user of the storm I wanted to share some sample visuals to track how useful the storm has been to me. Over the course of its creation I have tried out 60,000+ tracks across 1,400+ artists all orchestrated using the storm. 
+
+![Plot1](/images/plot1.png)
+
+![Plot2](/images/plot2.png)
+
+I almost always know and listen to songs before any of my friends or family, even the true fans of certain artists. I also know I won’t ever miss the best music out there from my favorite artists.
 
 # Requirements
 
