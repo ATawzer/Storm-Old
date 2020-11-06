@@ -1,7 +1,7 @@
 # The Storm
 A Spotify App designed for exhaustive music discovery. Using a set of user-defined playlists, The Storm will scour the Spotify library for all the new releases from the artists of that playlist. There is no following or manual selection needed from the user, just a playlist of the music they already like. All releases within a given window will then be sent directly to the output playlist the user desires, ready for listening.
 
-# Motivation and The Storm's Value to music Lovers
+# Motivation and The Storm's Value to Music Lovers
 The Storm is titled after the massive amounts of new music being added and listened to on Spotify everyday. This Repo is dedicated to giving users a way to navigate through that storm and find the music they want from the artists and playlists they already frequent all while requiring as little input from the user as possible. However, The Storm isn’t perfect and can be reasonably intimidating itself. Continue through the readme to determine if the Storm is a good fit for your musical listening needs.
 
 Spotify currently employs many different ways of delivering users new music. Here is an overview of the current ways users could find new music:
