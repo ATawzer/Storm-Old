@@ -64,9 +64,9 @@ Make sure you change the name of the storm the first time around. Do this anytim
 ## 5. Monitor Usage
 As a user of the storm I wanted to share some sample visuals to track how useful the storm has been to me. Over the course of its creation I have tried out 60,000+ tracks across 1,400+ artists all orchestrated using the storm. 
 
-![Plot1](/images/plot1.png)
+![Plot1](https://github.com/ATawzer/Storm/blob/master/images/plot1.PNG)
 
-![Plot2](/images/plot2.png)
+![Plot2](https://github.com/ATawzer/Storm/blob/master/images/plot2.PNG)
 
 I almost always know and listen to songs before any of my friends or family, even the true fans of certain artists. I also know I won’t ever miss the best music out there from my favorite artists.
 
