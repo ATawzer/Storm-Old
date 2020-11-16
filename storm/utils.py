@@ -131,10 +131,17 @@ class Storm:
         # Get Album lists
         self.get_artist_albums()
         self.filter_albums()
-        
+
         # Tracks
         self.get_album_tracks()
         self.clean_tracks()
+
+        # if track list to large apply date filter
+        if len(self.storm_track_ids)>9999:
+            self.filter_unseen = True
+            self.filter_albums()
+            self.get_album_tracks()
+            self.clean_tracks()
         
         # Playlist Writing
         self.archive_current()
