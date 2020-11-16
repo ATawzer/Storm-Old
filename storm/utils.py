@@ -14,7 +14,7 @@ class Storm:
     Single object for running and saving data frm the storm run. Call Storm.Run() to generate a playlist from
     saved artists.
     """
-    def __init__(self, user_id, inputs, output, archive, name, start_date=None):
+    def __init__(self, user_id, inputs, output, archive, name, start_date=None, filter_unseen=True):
         """
         params:
             user_id - spotify user account number
@@ -38,6 +38,7 @@ class Storm:
         self.name = name
         self.start_date = start_date
         self.window_date = None
+        self.filter_unseen = filter_unseen
         
         # Initialization
         self.authenticate()
@@ -401,11 +402,16 @@ class Storm:
    
     def filter_albums(self):
         """
-        Only keep albums that are in the date window or have neve been seen by user
+        If filter_unseen is True, only releases in the window are tracked. Otherwise
+        any new piece will be added.
         """
         # Or Condition, either its new or hasn't been viewed
         print("Filtering Album list for new content.")
-        self.new_albums = self.albums[(~self.albums.id.isin(self.album_ids)) | (self.albums.release_date >= self.start_date)]
+        if self.filter_unseen:
+            self.new_albums = self.albums[self.albums.release_date >= self.start_date]
+        else:
+            self.new_albums = self.albums[(~self.albums.id.isin(self.album_ids)) | (self.albums.release_date >= self.start_date)]
+
         self.mdf.loc[self.rd, 'albums_augmented'] = len(self.new_albums)
           
     def get_album_tracks(self):
