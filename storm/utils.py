@@ -3,7 +3,7 @@ from spotipy import util
 from spotipy import oauth2
 import numpy as np
 import pandas as pd
-from tqdm import tqdm_notebook as tqdm
+import tqdm
 from os import path
 import datetime as dt
 import time
@@ -264,7 +264,6 @@ class Storm:
         output:
             Cleaned set of artist ids to augment
         """
-        new_artists = []
         for track in track_df:
             try:
                 artists = dict(track)['artists']
