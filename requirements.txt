@@ -59,6 +59,7 @@ ptyprocess @ file:///tmp/build/80754af9/ptyprocess_1609355006118/work/dist/ptypr
 pycparser @ file:///tmp/build/80754af9/pycparser_1594388511720/work
 Pygments @ file:///tmp/build/80754af9/pygments_1615143339740/work
 pylint @ file:///opt/concourse/worker/volumes/live/429ee981-99bd-471e-6b88-dd7fb38589b4/volume/pylint_1614971240022/work
+pymongo==3.11.3
 pyOpenSSL @ file:///tmp/build/80754af9/pyopenssl_1608057966937/work
 pyparsing @ file:///home/linux1/recipes/ci/pyparsing_1610983426697/work
 pyrsistent @ file:///opt/concourse/worker/volumes/live/ff11f3f0-615b-4508-471d-4d9f19fa6657/volume/pyrsistent_1600141727281/work
