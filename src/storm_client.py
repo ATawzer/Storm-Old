@@ -8,6 +8,10 @@ from os import path
 import datetime as dt
 import time
 
+# Creds
+from dotenv import load_dotenv
+load_dotenv()
+
 # A class to manage all of the storm functions and authentication
 class Storm:
     """
@@ -27,8 +31,8 @@ class Storm:
         # Variables
         self.scope = 'user-follow-read playlist-modify-private playlist-modify-public user-follow-modify' # scope for permissions
         self.user_id = user_id
-        self.client_id = '9b41900f606c4e55855524f448917d64' # API app id
-        self.client_secret = '3277c16b708548369ce1f42deed974ea' # API app secret
+        self.client_id = os.getenv('client_id') # API app id
+        self.client_secret = os.getenv('client_secret') # API app secret
         self.token = None
         self.token_start = None
         self.sp = None
