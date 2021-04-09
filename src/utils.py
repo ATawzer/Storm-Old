@@ -3,7 +3,7 @@ from spotipy import util
 from spotipy import oauth2
 import numpy as np
 import pandas as pd
-import tqdm
+from tqdm import tqdm
 from os import path
 import datetime as dt
 import time
@@ -14,7 +14,7 @@ class Storm:
     Single object for running and saving data frm the storm run. Call Storm.Run() to generate a playlist from
     saved artists.
     """
-    def __init__(self, user_id, inputs, output, archive, name, start_date=None, filter_unseen=True):
+    def __init__(self, user_id, inputs, output, archive, name, start_date=None, filter_unseen=True, instrumental=True):
         """
         params:
             user_id - spotify user account number
@@ -39,6 +39,7 @@ class Storm:
         self.start_date = start_date
         self.window_date = None
         self.filter_unseen = filter_unseen
+        self.instrumental = instrumental
         
         # Initialization
         self.authenticate()
@@ -321,6 +322,9 @@ class Storm:
                     continue
             
             # Remove if certain features don't clear
+            if not self.instrumental:
+                check = True
+
             if check:
                  newids.append(self.new_tracks.loc[index, 'id'])
         print("Ending Track Amount: " + str(len(newids)))
