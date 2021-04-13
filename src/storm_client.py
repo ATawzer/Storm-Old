@@ -3,10 +3,64 @@ from spotipy import util
 from spotipy import oauth2
 import numpy as np
 import pandas as pd
-import tqdm
-from os import path
+from tqdm import tqdm
+import os
 import datetime as dt
 import time
+import json
+
+# DB
+from pymongo import MongoClient
+from dotenv import load_dotenv
+load_dotenv()
+
+
+class StormClient:
+
+    def __init__(self, user_id):
+
+        self.scope = 'user-follow-read playlist-modify-private playlist-modify-public user-follow-modify' # scope for permissions
+        self.user_id = user_id
+        self.client_id = os.getenv('storm_client_id') # API app id
+        self.client_secret = os.getenv('storm_client_secret') # API app secret
+
+        # DB connection
+        self.mc = MongoClient(os.getenv('mongodb_uri'))
+        self.db = self.mc['storm']
+
+        # Spotify API connection
+        self.sp = None
+        self.token_end = None
+        self.get_token()
+
+    # Authentication
+    def get_token(self):
+
+        if os.path.exists('token.json'):
+            with json.load(open('token.json', "r")) as f:
+                if dt.datetime.fromtimestamp(f['expires']) < dt.datetime.now():
+                    self.token = f['token']
+                    self.token_end = f['expires']
+
+        else:
+            self.get_new_token()
+
+        self.sp = spotipy.Spotify(auth=self.token)
+
+    def get_new_token(self):
+
+        self.token = util.prompt_for_user_token(self.user_id,
+                                                    scope=self.scope,
+                                                    client_id=self.client_id,
+                                                    client_secret=self.client_secret,
+                                                    redirect_uri='http://localhost/')
+
+        self.token_end = dt.datetime.timestamp(dt.datetime.now() + dt.timedelta(minutes=59))
+        json.dump({'token':self.token, 'expires':str(self.token_end)}, open('token.json', 'w'))
+
+
+storm = StormClient('1241528689')
+
 
 # A class to manage all of the storm functions and authentication
 class Storm:
@@ -14,7 +68,7 @@ class Storm:
     Single object for running and saving data frm the storm run. Call Storm.Run() to generate a playlist from
     saved artists.
     """
-    def __init__(self, user_id, inputs, output, archive, name, start_date=None, filter_unseen=True):
+    def __init__(self, user_id, inputs, output, archive, name, start_date=None, filter_unseen=True, instrumental=True):
         """
         params:
             user_id - spotify user account number
@@ -27,8 +81,8 @@ class Storm:
         # Variables
         self.scope = 'user-follow-read playlist-modify-private playlist-modify-public user-follow-modify' # scope for permissions
         self.user_id = user_id
-        self.client_id = '9b41900f606c4e55855524f448917d64' # API app id
-        self.client_secret = '3277c16b708548369ce1f42deed974ea' # API app secret
+        self.client_id = os.getenv('client_id') # API app id
+        self.client_secret = os.getenv('client_secret') # API app secret
         self.token = None
         self.token_start = None
         self.sp = None
@@ -39,6 +93,7 @@ class Storm:
         self.start_date = start_date
         self.window_date = None
         self.filter_unseen = filter_unseen
+        self.instrumental = instrumental
         
         # Initialization
         self.authenticate()
@@ -321,6 +376,9 @@ class Storm:
                     continue
             
             # Remove if certain features don't clear
+            if not self.instrumental:
+                check = True
+
             if check:
                  newids.append(self.new_tracks.loc[index, 'id'])
         print("Ending Track Amount: " + str(len(newids)))

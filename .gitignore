@@ -1,3 +1,12 @@
 
 storm/Storm.sln
 storm/Storm/Storm.mdproj
+storm/config/config_secret.json
+
+*.env
+
+.idea
+.vscode
+.ipynb_checkpoints
+
+token.json

@@ -13,6 +13,7 @@ cryptography @ file:///opt/concourse/worker/volumes/live/c515855a-effc-46df-74dc
 cycler==0.10.0
 decorator @ file:///home/ktietz/src/ci/decorator_1611930055503/work
 defusedxml @ file:///tmp/build/80754af9/defusedxml_1615228127516/work
+dnspython==1.16.0
 entrypoints==0.3
 idna @ file:///home/linux1/recipes/ci/idna_1610986105248/work
 importlib-metadata @ file:///opt/concourse/worker/volumes/live/f9a6680f-db74-4853-64f4-3a74b4033188/volume/importlib-metadata_1615900433778/work
@@ -59,6 +60,7 @@ ptyprocess @ file:///tmp/build/80754af9/ptyprocess_1609355006118/work/dist/ptypr
 pycparser @ file:///tmp/build/80754af9/pycparser_1594388511720/work
 Pygments @ file:///tmp/build/80754af9/pygments_1615143339740/work
 pylint @ file:///opt/concourse/worker/volumes/live/429ee981-99bd-471e-6b88-dd7fb38589b4/volume/pylint_1614971240022/work
+pymongo==3.11.3
 pyOpenSSL @ file:///tmp/build/80754af9/pyopenssl_1608057966937/work
 pyparsing @ file:///home/linux1/recipes/ci/pyparsing_1610983426697/work
 pyrsistent @ file:///opt/concourse/worker/volumes/live/ff11f3f0-615b-4508-471d-4d9f19fa6657/volume/pyrsistent_1600141727281/work
