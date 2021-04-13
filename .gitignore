@@ -9,4 +9,4 @@ storm/config/config_secret.json
 .vscode
 .ipynb_checkpoints
 
-.token
+token.json
