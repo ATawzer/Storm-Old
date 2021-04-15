@@ -71,7 +71,8 @@ class StormClient:
         self.token_end = dt.datetime.timestamp(dt.datetime.now() + dt.timedelta(minutes=59))
         json.dump({'token':self.token, 'expires':str(self.token_end)}, open('token.json', 'w'))
 
-    def 
+    
+
 
 class StormRunner:
     """
@@ -94,11 +95,12 @@ class Storm:
     """
     Main callable that initiates and saves storm data
     """
-    def __init__(self, user_id, storm_name):
+    def __init__(self, user_id, storm_name, start_date=None):
 
         self.sc = StormClient(user_id)
         self.sdb = StormDB()
         self.storm_name = storm_name
+        self.start_date = start_date
 
         # init
         self.config = {}

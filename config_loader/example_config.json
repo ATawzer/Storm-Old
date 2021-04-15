@@ -1,0 +1,10 @@
+{
+    "storm_name":"something descriptive with no spaces",
+    "good_targets":"playlist id corresponding to the playlist with 'good' targets",
+    "great_targets":"playlist id corresponding to the playlist with 'great' targets",
+    "additional_playlists":[
+        "Sample 1 where more music is stored", 
+        "sample 2 where even more is stored"],
+    "archive":false,
+    "delivery_sample_size":50
+}
