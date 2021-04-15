@@ -10,9 +10,26 @@ import time
 import json
 
 # DB
-from pymongo import MongoClient
+import boto3
+import awswrangler as wr
 from dotenv import load_dotenv
 load_dotenv()
+
+class StormDB:
+    """
+    Manages the MongoDB connections, reading and writing.
+    """
+    def __init__(self):
+
+        # Build mongo client and db
+        self.mc = MongoClient(os.getenv('mongo_uri'))
+        self.db = self.mc[os.getenv('storm_db')]
+
+        # initialize collections
+        self.artists = self.db['artists']
+        self.albums = self.db['albums']
+        self.storms = self.db['storm_metadata']
+        self.tracks = self.db['tracks']
 
 
 class StormClient:
@@ -23,10 +40,6 @@ class StormClient:
         self.user_id = user_id
         self.client_id = os.getenv('storm_client_id') # API app id
         self.client_secret = os.getenv('storm_client_secret') # API app secret
-
-        # DB connection
-        self.mc = MongoClient(os.getenv('mongodb_uri'))
-        self.db = self.mc['storm']
 
         # Spotify API connection
         self.sp = None
@@ -58,8 +71,47 @@ class StormClient:
         self.token_end = dt.datetime.timestamp(dt.datetime.now() + dt.timedelta(minutes=59))
         json.dump({'token':self.token, 'expires':str(self.token_end)}, open('token.json', 'w'))
 
+    def 
 
-storm = StormClient('1241528689')
+class StormRunner:
+    """
+    Orchestrates a storm run
+    """
+    def __init__(self, client, db, config):
+
+        self.sc = client
+        self.sdb = StormDB
+        self.config = config
+
+    def Run(self):
+        """
+        Storm Orchestration based on a configuration.
+        """
+
+        return False
+
+class Storm:
+    """
+    Main callable that initiates and saves storm data
+    """
+    def __init__(self, user_id, storm_name):
+
+        self.sc = StormClient(user_id)
+        self.sdb = StormDB()
+        self.storm_name = storm_name
+
+        # init
+        self.config = {}
+
+    def load_configuration(self):
+
+        if len(self.storms.find({"name":storm_name}, {})):
+            print("No existing storm found for that name.")
+            print("Please use the configuration creator or add a config.json to the config_loader directory.")
+        else:
+            storm
+
+storm = Storm('1241528689')
 
 
 # A class to manage all of the storm functions and authentication
