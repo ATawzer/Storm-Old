@@ -12,6 +12,7 @@ pymongo = "*"
 pyssl = "*"
 python-dotenv = "*"
 tqdm = "*"
+awswrangler = "*"
 
 [dev-packages]
 
