@@ -1,0 +1,20 @@
+{
+    "storm_name":"film_vg_instrumental",
+    "good_targets":"3K9no6AflSDYiiMzignAm7",
+    "great_targets":"0R1gw1JbcOFD0r8IzrbtYP",
+    "rolling_good":{"is_active":true, "palylist":"1SZS16UcW0XOzgh6UWXA9S"},
+    "full_storm_delivery":{"is_active":true, "playlist":"7fnvajjUoWBQDo8iFNMH3s", "rank_ordered":true},
+    "sample_storm_delivery":{"is_active":true, "playlist":"1Q8WS7Xj51WCHZctXGDsrp", "sample_size":50},
+    "additional_input_playlists":{
+        "Much Needed":"7N3pwZE1N38wcdiuLxiPvq",
+        "Room on the Boat":"1SZS16UcW0XOzgh6UWXA9S",
+        "Refuge":"3K9no6AflSDYiiMzignAm7",
+        "Safety":"0R1gw1JbcOFD0r8IzrbtYP",
+        "Shelter from the Storm":"2yueH0i9C2daBRawYIc9P8",
+        "Soundtracked":"37i9dQZF1DWW7gj0FcGEx6",
+        "Soundtrack for Study":"0hZNf3tcMT4x03FyjKYJ3M",
+        "Film Music - Movie Scores":"5GhatXsZVNYxrhqEAfZPLR",
+        "Video Game Soundtracks":"3Iwd2RiXCzmm1AMUpRAaHO",
+        "Video Game Music Unofficial":"3aI7ztMmDhMHhYe1KOPFLG"
+    }
+}

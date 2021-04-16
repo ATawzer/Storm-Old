@@ -10,9 +10,12 @@ import time
 import json
 
 # DB
-import boto3
-import awswrangler as wr
+from pymongo import MongoClient
 from dotenv import load_dotenv
+
+# Internal
+from helper import *
+print = slow_print # for fun
 load_dotenv()
 
 class StormDB:
@@ -23,7 +26,7 @@ class StormDB:
 
         # Build mongo client and db
         self.mc = MongoClient(os.getenv('mongo_uri'))
-        self.db = self.mc[os.getenv('storm_db')]
+        self.db = self.mc[os.getenv('db_name')]
 
         # initialize collections
         self.artists = self.db['artists']
@@ -31,6 +34,28 @@ class StormDB:
         self.storms = self.db['storm_metadata']
         self.tracks = self.db['tracks']
 
+    def get_config(self, storm_name):
+        """
+        returns a storm configuration given its name, assuming it exists.
+        """
+        q = {'name':storm_name}
+        cols = {'config':1}
+        r = list(self.storms.find(q, cols))
+
+        if len(r) == 0:
+            raise KeyError(f"{storm_name} not found, no configuration to load.")
+        else:
+            return r[0]['config']
+
+    def get_all_configs(self):
+        """
+        Returns all configurations in DB.
+        """
+        q = {}
+        cols = {"name":1, "_id":0}
+        r = list(self.storms.find(q, cols))
+
+        return [x['name'] for x in r]
 
 class StormClient:
 
@@ -43,42 +68,56 @@ class StormClient:
 
         # Spotify API connection
         self.sp = None
-        self.token_end = None
-        self.get_token()
+        self.sp_cc = oauth2.SpotifyClientCredentials(self.client_id, self.client_secret)
+        self.token = self.sp_cc.get_access_token()
+
+        # Good
+        print("Storm Client successfully connected to Spotify.\n")
+
 
     # Authentication
-    def get_token(self):
+    def refresh_token(self):
 
-        if os.path.exists('token.json'):
-            with json.load(open('token.json', "r")) as f:
-                if dt.datetime.fromtimestamp(f['expires']) < dt.datetime.now():
-                    self.token = f['token']
-                    self.token_end = f['expires']
+        try:
+            return self.sp_cc.get_access_token()
+        except:
+            self.token = util.prompt_for_user_token(self.user_id,
+                                                        scope=self.scope,
+                                                        client_id=self.client_id,
+                                                        client_secret=self.client_secret,
+                                                        redirect_uri='http://localhost/')
 
-        else:
-            self.get_new_token()
+    def get_playlist_tracks(self, playlist_id):
+        """ Returns a playlists tracks """
 
-        self.sp = spotipy.Spotify(auth=self.token)
+        lim = 50
+        more_tracks = True
+        offset = 0
 
-    def get_new_token(self):
+        self.refresh_token()
+        playlist_results = self.sp.user_playlist_tracks(self.user_id, playlist_id, limit=lim, offset=offset)
+            
+        if len(playlist_results['items']) < lim:
+                more_tracks = False
 
-        self.token = util.prompt_for_user_token(self.user_id,
-                                                    scope=self.scope,
-                                                    client_id=self.client_id,
-                                                    client_secret=self.client_secret,
-                                                    redirect_uri='http://localhost/')
+        while more_tracks:
 
-        self.token_end = dt.datetime.timestamp(dt.datetime.now() + dt.timedelta(minutes=59))
-        json.dump({'token':self.token, 'expires':str(self.token_end)}, open('token.json', 'w'))
+            self.check_token()
+            offset += lim
+            batch = self.sp.user_playlist_tracks(self.user_id, playlist_id, limit=lim, offset=offset)
+            playlist_results['items'].extend(batch['items'])
 
-    
+            if len(batch['items']) < lim:
+                more_tracks = False
 
+        response_df = pd.DataFrame(playlist_results['items'])
+        return response_df  
 
 class StormRunner:
     """
     Orchestrates a storm run
     """
-    def __init__(self, client, db, config):
+    def __init__(self, client, db, config, start_date=None):
 
         self.sc = client
         self.sdb = StormDB
@@ -89,31 +128,71 @@ class StormRunner:
         Storm Orchestration based on a configuration.
         """
 
-        return False
+        print(f"Runner {self.config['storm_name']} Started Successfully!\n")
+        
+        print("Initializing Playlists. . .")
+        self.load_playlists()
+        self.clean_playlists()
+        self.save_playlists()
+        
+
+    def load_playlists(self):
+        """
+        Pulls down playlist info and writes it back to db
+        """
+        
+        print("Loading Great Targets . . .")
+        great_targets = self.sc.get_playlist_tracks(self.config['great_targets'])
+
+        print("Loading Good Targets . . . ")
+        good_targets = self.sc.get_playlist_tracks(self.config['good_targets'])
+
+        print("Loading Additional Playlists . . .")
+        aps = {}
+        for ap in self.config['additional_playlists']:
+            aps[ap] = self.sc.get_playlist_tracks(self.config['additional_playlists'][ap])
+        
 
 class Storm:
     """
     Main callable that initiates and saves storm data
     """
-    def __init__(self, user_id, storm_name, start_date=None):
+    def __init__(self, user_id, storm_names, start_date=None):
 
+        self.print_initial_screen()
         self.sc = StormClient(user_id)
         self.sdb = StormDB()
-        self.storm_name = storm_name
+        self.storm_names = storm_names
         self.start_date = start_date
+        self.runners = {}
 
         # init
-        self.config = {}
+        self.load_configurations()
+        self.Run()
 
-    def load_configuration(self):
+    def print_initial_screen(self):
 
-        if len(self.storms.find({"name":storm_name}, {})):
-            print("No existing storm found for that name.")
-            print("Please use the configuration creator or add a config.json to the config_loader directory.")
-        else:
-            storm
+        print("A Storm is Brewing. . .\n")
+        time.sleep(.5)
 
-storm = Storm('1241528689')
+    def load_configurations(self):
+        """
+        Load in all of the configurations metadata.
+        """
+        print("Loading Configurations . . .")
+        for storm_name in self.storm_names:
+            print(f"Loading: {storm_name}")
+            self.runners[storm_name] = StormRunner(self.sc, self.sdb, self.sdb.get_config(storm_name))
+            print("Success!")
+        print()
+        
+    def Run(self):
+
+        print("Sending off Storm Runners. . . ")
+        for storm_name in self.runners:
+            self.runners[storm_name].Run()
+
+storm = Storm('1241528689', ['film_vg_instrumental'])
 
 
 # A class to manage all of the storm functions and authentication
