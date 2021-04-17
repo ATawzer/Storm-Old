@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 
 # Internal
 from helper import *
-print = slow_print # for fun
+#print = slow_print # for fun
 load_dotenv()
 
 class StormDB:
@@ -33,6 +33,7 @@ class StormDB:
         self.albums = self.db['albums']
         self.storms = self.db['storm_metadata']
         self.tracks = self.db['tracks']
+        self.playlists = self.db['playlists']
 
     def get_config(self, storm_name):
         """
@@ -57,6 +58,44 @@ class StormDB:
 
         return [x['name'] for x in r]
 
+    # Playlist
+    def get_playlist_collection_date(self, playlist_id):
+        """
+        Gets a playlists last collection date.
+        """
+        q = {"_id":playlist_id}
+        cols = {"last_collected_date":1}
+        r = list(self.playlists.find(q, cols))
+
+        # If not found print old date
+        if len(r) == 0:
+            return '2000-01-01' # Long ago
+        elif len(r) == 1:
+            return r[0]['last_collected_date']
+        else:
+            raise Exception("Playlist Ambiguous, should be unique to table.")
+
+
+    def update_playlist(self, pr):
+
+        q = {'_id':pr['_id']}
+
+        # Add new entry or update existing one
+        record = pr
+        changelog_update =  {
+                            'snapshot':pr['info']['snapshot_id'],
+                            'tracks':pr['tracks']
+                            }
+
+        # Update static fields
+        exclude_keys = ['changelog']
+        update_dict = {k: pr[k] for k in set(list(pr.keys())) - set(exclude_keys)}
+        self.playlists.update_one(q, {"$set":record}, upsert=True)
+
+        # Push to append fields (date as new key)
+        for key in exclude_keys:
+            self.playlists.update_one(q, {"$set":{f"{key}.{pr['last_collected']}":changelog_update}}, upsert=True)
+
 class StormClient:
 
     def __init__(self, user_id):
@@ -67,136 +106,214 @@ class StormClient:
         self.client_secret = os.getenv('storm_client_secret') # API app secret
 
         # Spotify API connection
-        self.sp = None
         self.sp_cc = oauth2.SpotifyClientCredentials(self.client_id, self.client_secret)
-        self.token = self.sp_cc.get_access_token()
+        self.token = None
+
+        # Authenticate
+        self.refresh_connection()
 
         # Good
         print("Storm Client successfully connected to Spotify.\n")
 
 
     # Authentication
-    def refresh_token(self):
-
+    def refresh_connection(self):
+        """
+        Get a cached token (again) or try to get a new one. 
+        Call this before any api call to make sure it won't get credential error.
+        """
         try:
-            return self.sp_cc.get_access_token()
+            self.token = self.sp_cc.get_access_token(as_dict=False)
+            self.sp = spotipy.Spotify(auth=self.token)
         except:
+            print("Looks like a new User, couldn't get access token. Trying authenticating.")
             self.token = util.prompt_for_user_token(self.user_id,
                                                         scope=self.scope,
                                                         client_id=self.client_id,
                                                         client_secret=self.client_secret,
                                                         redirect_uri='http://localhost/')
+            self.sp = spotipy.Spotify(auth=self.token)
+
+    def get_playlist_info(self, playlist_id):
+        """ Returns subset of playlist metadata """
+
+        # params
+        fields = 'description,id,name,owner,snapshot_id'
+
+        # Get the info
+        self.refresh_connection()
+        return self.sp.playlist(playlist_id, fields=fields)
 
     def get_playlist_tracks(self, playlist_id):
-        """ Returns a playlists tracks """
+        """
+        Return subset of information about a playlists tracks
+        """
 
-        lim = 50
-        more_tracks = True
+        # Call info
+        lim = 100
         offset = 0
+        fields = 'items(track(id))' # only getting the ids, get info about them later
+        
+        # Get number of tracks trying to get (faster to know then go in blind)
+        self.refresh_connection()
+        total = int(self.sp.user_playlist_tracks(self.user_id, playlist_id, fields='total')['total'])
+        print(f"Total Tracks: {total}")
+        
+        # loop through and append track ids
+        result = ['' for x in range(total)] # List of track ids pre-initialized
+        for i in tqdm(range(int(np.ceil(total/lim)))):
+            self.refresh_connection()
+            response = self.sp.user_playlist_tracks(self.user_id, playlist_id, fields=fields, limit=lim, offset=(i*lim))
 
-        self.refresh_token()
-        playlist_results = self.sp.user_playlist_tracks(self.user_id, playlist_id, limit=lim, offset=offset)
-            
-        if len(playlist_results['items']) < lim:
-                more_tracks = False
+            result[i*lim:(i*lim)+len(response['items'])] = [x['track']['id'] for x in response['items']]
 
-        while more_tracks:
+        return result
 
-            self.check_token()
-            offset += lim
-            batch = self.sp.user_playlist_tracks(self.user_id, playlist_id, limit=lim, offset=offset)
-            playlist_results['items'].extend(batch['items'])
+    def get_artists_from_tracks(self, tracks):
+        """
+        Returns list of artist_ids given track_ids
+        """
 
-            if len(batch['items']) < lim:
-                more_tracks = False
+        # Call Info
+        lim = 100
+        offset = 0
+        fields = 'artists(id)'
+        self.refresh_connection()
 
-        response_df = pd.DataFrame(playlist_results['items'])
-        return response_df  
+
+        return self.sp.tracks(tracks[:50])
+
+
+
+
+
 
 class StormRunner:
     """
     Orchestrates a storm run
     """
-    def __init__(self, client, db, config, start_date=None):
+    def __init__(self, storm_name, start_date=None):
 
-        self.sc = client
-        self.sdb = StormDB
-        self.config = config
+        print(f"Initializing Runner for {storm_name}")
+        self.sdb = StormDB()
+        self.config = self.sdb.get_config(storm_name)
+        self.sc = StormClient(self.config['user_id'])
+        self.name = storm_name
+
+        # metadata
+        self.run_date = dt.datetime.now().strftime('%Y-%m-%d')
+        self.run_record = {'config':self.config, 
+                           'run_date':self.run_date,
+                           'playlists':[],
+                           'input_tracks':[],
+                           'artists':[]}
+
+        print(f"Runner {storm_name} Started Successfully!\n")
+        #self.Run()
 
     def Run(self):
         """
         Storm Orchestration based on a configuration.
         """
 
-        print(f"Runner {self.config['storm_name']} Started Successfully!\n")
-        
         print("Initializing Playlists. . .")
-        self.load_playlists()
-        self.clean_playlists()
-        self.save_playlists()
+        self.prepare_playlists()
         
+        print("Collecting track info.")
+        self.prepare_input_track_list()
+    
+    # Object Based orchestration
+    def prepare_playlists(self):
+        """
+        Initial Playlist setup orchestration
+        """
 
-    def load_playlists(self):
+        print("Loading Great Targets . . .")
+        self.load_playlist(self.config['great_targets'])
+
+        print("Loading Good Targets . . .")
+        self.load_playlist(self.config['great_targets'])
+
+        # Check for additional playlists
+        if 'additional_input_playlists' in self.config.keys():
+            if self.config['additional_input_playlists']['is_active']:
+                for ap, ap_id in self.config['additional_input_playlists']['playlists'].items():
+                    print(f"Loading Additional Playlist: {ap}")
+                    self.load_playlist(ap_id)
+        
+         ## ---- Future Version ----
+        # Check if we need to move rolling
+        
+        # Check what songs remain in sample and full delivery
+       
+
+        print("Playlists Prepared. \n")
+
+    def prepare_input_track_list(self):
+        """
+        Collects artists from track list
+        """
+
+        # First check in the db for track info
+        tracks_collected = []
+        artists = self.sc.get_artists_from_tracks(self.run_record['input_tracks'])
+
+    # Low Level orchestration
+    def load_playlist(self, playlist_id):
         """
         Pulls down playlist info and writes it back to db
         """
+
+        # Determine if playlists need examining
+        if self.run_date != self.sdb.get_playlist_collection_date(playlist_id):
+
+            # Acquire data
+            playlist_record = {'_id':playlist_id, 
+                            'last_collected':self.run_date}
+
+            playlist_record['info'] = self.sc.get_playlist_info(playlist_id)
+            playlist_record['tracks'] = np.unique(self.sc.get_playlist_tracks(playlist_id))
+            playlist_record['artists'] = self.sc.get_playlist_artists(playlist_record['tracks'])
+
+            # Update run record
+            self.run_record['playlists'].append(playlist_id)
+            self.run_record['input_tracks'].extend([x for x in playlist_record['tracks'] if x not in run_record['input_tracks'])
+            self.run_record['input_artists'].extend([x for x in playlist_record['artists'] if x not in run_record['input_artists']])
+
+            print("Writing changes to DB")
+            self.sdb.update_playlist(playlist_record)
+
+        else:
+            print("Skipping Load, already collected today.")
+
         
-        print("Loading Great Targets . . .")
-        great_targets = self.sc.get_playlist_tracks(self.config['great_targets'])
-
-        print("Loading Good Targets . . . ")
-        good_targets = self.sc.get_playlist_tracks(self.config['good_targets'])
-
-        print("Loading Additional Playlists . . .")
-        aps = {}
-        for ap in self.config['additional_playlists']:
-            aps[ap] = self.sc.get_playlist_tracks(self.config['additional_playlists'][ap])
         
-
+        
 class Storm:
     """
     Main callable that initiates and saves storm data
     """
-    def __init__(self, user_id, storm_names, start_date=None):
+    def __init__(self, storm_names, start_date=None):
 
         self.print_initial_screen()
-        self.sc = StormClient(user_id)
         self.sdb = StormDB()
         self.storm_names = storm_names
         self.start_date = start_date
         self.runners = {}
 
-        # init
-        self.load_configurations()
-        self.Run()
-
     def print_initial_screen(self):
 
         print("A Storm is Brewing. . .\n")
         time.sleep(.5)
-
-    def load_configurations(self):
-        """
-        Load in all of the configurations metadata.
-        """
-        print("Loading Configurations . . .")
-        for storm_name in self.storm_names:
-            print(f"Loading: {storm_name}")
-            self.runners[storm_name] = StormRunner(self.sc, self.sdb, self.sdb.get_config(storm_name))
-            print("Success!")
-        print()
         
     def Run(self):
 
-        print("Sending off Storm Runners. . . ")
-        for storm_name in self.runners:
-            self.runners[storm_name].Run()
-
-storm = Storm('1241528689', ['film_vg_instrumental'])
-
+        print("Spinning up Storm Runners. . . ")
+        for storm_name in self.storm_names:
+            self.runners[storm_name] = StormRunner(storm_name)
 
 # A class to manage all of the storm functions and authentication
-class Storm:
+class StormOld:
     """
     Single object for running and saving data frm the storm run. Call Storm.Run() to generate a playlist from
     saved artists.
