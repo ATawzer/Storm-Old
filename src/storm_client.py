@@ -75,7 +75,6 @@ class StormDB:
         else:
             raise Exception("Playlist Ambiguous, should be unique to table.")
 
-
     def update_playlist(self, pr):
 
         q = {'_id':pr['_id']}
@@ -95,6 +94,55 @@ class StormDB:
         # Push to append fields (date as new key)
         for key in exclude_keys:
             self.playlists.update_one(q, {"$set":{f"{key}.{pr['last_collected']}":changelog_update}}, upsert=True)
+
+    def get_loaded_playlist_tracks(self, playlist_id):
+        """
+        Returns a playlists most recently collected tracks
+        """
+        q = {"_id":playlist_id}
+        cols = {'tracks':1, "_id":0}
+        r = list(self.playlists.find(q, cols))
+        
+        if len(r) == 0:
+            raise ValueError(f"Playlist {playlist_id} not found.")
+        else:
+            return r[0]['tracks']
+
+    def get_loaded_playlist_artists(self, playlist_id):
+        """
+        Returns a playlists most recently collected artists
+        """
+        q = {"_id":playlist_id}
+        cols = {'artists':1, "_id":0}
+        r = list(self.playlists.find(q, cols))
+        
+        if len(r) == 0:
+            raise ValueError(f"Playlist {playlist_id} not found.")
+        else:
+            return r[0]['artists']
+
+    # Artists
+    def get_known_artist_ids(self):
+        """
+        Returns all ids from the artists db.
+        """
+
+        q = {}
+        cols = {"_id":1}
+        r = list(self.artists.find(q, cols))
+
+        return r
+
+    def update_artists(self, artist_info):
+        """
+        Updates the artist db with new info
+        """
+
+        for artist in tqdm(artist_info):
+            q = {"_id":artist['id']}
+            self.artists.update(q, {"$set":artist_info}, upsert=True)
+
+
 
 class StormClient:
 
@@ -232,6 +280,7 @@ class StormRunner:
                            'playlists':[],
                            'input_tracks':[],
                            'input_artists':[]}
+        #!!!!!!!! self.last_run = self.sdb.get_last_run(storm_name)
 
         print(f"{self.name} Started Successfully!\n")
         #self.Run()
@@ -306,6 +355,8 @@ class StormRunner:
         if len(new_artists) > 0:
             print(f"{len(new_artists)} New Artists Found! Getting their info now.")
             new_artist_info = self.sc.get_artists_info(new_artists)
+
+            print("Writing their info to DB . . .")
             self.sdb.update_artists(new_artist_info)
         
         else:
@@ -332,16 +383,20 @@ class StormRunner:
             playlist_record['tracks'] = self.sc.get_playlist_tracks(playlist_id)
             playlist_record['artists'] = self.sc.get_artists_from_tracks(playlist_record['tracks'])
 
-            # Update run record
-            self.run_record['playlists'].append(playlist_id)
-            self.run_record['input_tracks'].extend([x for x in playlist_record['tracks'] if x not in self.run_record['input_tracks']])
-            self.run_record['input_artists'].extend([x for x in playlist_record['artists'] if x not in self.run_record['input_artists']])
-
             print("Writing changes to DB")
             self.sdb.update_playlist(playlist_record)
 
         else:
-            print("Skipping Load, already collected today.")
+            print("Skipping API Load, already collected today.")
+
+        # Get the playlists tracks from DB
+        input_tracks = self.sdb.get_loaded_playlist_tracks(playlist_id)
+        input_artists = self.sdb.get_loaded_playlist_artists(playlist_id)
+
+        # Update run record
+        self.run_record['playlists'].append(playlist_id)
+        self.run_record['input_tracks'].extend([x for x in input_tracks if x not in self.run_record['input_tracks']])
+        self.run_record['input_artists'].extend([x for x in input_artists if x not in self.run_record['input_artists']])
 
         
         

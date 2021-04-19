@@ -1,8 +1,11 @@
 storm = Storm(['film_vg_instrumental'])
 
 sr = StormRunner('film_vg_instrumental')
-sr.load_playlists()
+sr.collect_playlist_info()
+sr.collect_artist_info()
 
+sdb = StormDB()
+sdb.get_loaded_playlist_tracks('0R1gw1JbcOFD0r8IzrbtYP')
 
 
 
