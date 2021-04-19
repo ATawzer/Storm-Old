@@ -64,14 +64,14 @@ class StormDB:
         Gets a playlists last collection date.
         """
         q = {"_id":playlist_id}
-        cols = {"last_collected_date":1}
+        cols = {"last_collected":1}
         r = list(self.playlists.find(q, cols))
 
         # If not found print old date
         if len(r) == 0:
             return '2000-01-01' # Long ago
         elif len(r) == 1:
-            return r[0]['last_collected_date']
+            return r[0]['last_collected']
         else:
             raise Exception("Playlist Ambiguous, should be unique to table.")
 
@@ -146,7 +146,7 @@ class StormClient:
 
     def get_playlist_tracks(self, playlist_id):
         """
-        Return subset of information about a playlists tracks
+        Return subset of information about a playlists tracks (unique)
         """
 
         # Call info
@@ -167,7 +167,7 @@ class StormClient:
 
             result[i*lim:(i*lim)+len(response['items'])] = [x['track']['id'] for x in response['items']]
 
-        return result
+        return np.unique(result).tolist()
 
     def get_artists_from_tracks(self, tracks):
         """
@@ -175,16 +175,41 @@ class StormClient:
         """
 
         # Call Info
-        lim = 100
-        offset = 0
-        fields = 'artists(id)'
-        self.refresh_connection()
+        id_lim = 50
+        batches = np.array_split(tracks, int(np.ceil(len(tracks)/id_lim)))
 
+        # Get Artists
+        artists = []
+        for batch in tqdm(batches):
+            self.refresh_connection()
+            response = self.sp.tracks(batch, market='US')['tracks']
+            [artists.extend(x['artists']) for x in response]
 
-        return self.sp.tracks(tracks[:50])
+        # Filter to just ids
+        return np.unique([x['id'] for x in artists]).tolist()
 
+    def get_artist_info(self, artists):
+        """
+        Gets a subset of artist info from a list of ids
+        """
 
+        # Call info
+        id_lim = 50
+        keys = ['followers', 'genres', 'id', 'name', 'popularity']
+        batches = np.array_split(artists, int(np.ceil(len(artists)/id_lim)))
 
+        # Get All artist info
+        result = []
+        for batch in tqdm(batches):
+            self.refresh_connection()
+            response = self.sp.artists(batch)['artists']
+            result.extend(response)
+
+        # Filter to just relevant fields
+        for i in range(len(result)):
+            result[i] = {k: result[i][k] for k in keys}
+
+        return result
 
 
 
@@ -206,9 +231,9 @@ class StormRunner:
                            'run_date':self.run_date,
                            'playlists':[],
                            'input_tracks':[],
-                           'artists':[]}
+                           'input_artists':[]}
 
-        print(f"Runner {storm_name} Started Successfully!\n")
+        print(f"{self.name} Started Successfully!\n")
         #self.Run()
 
     def Run(self):
@@ -216,14 +241,34 @@ class StormRunner:
         Storm Orchestration based on a configuration.
         """
 
-        print("Initializing Playlists. . .")
-        self.prepare_playlists()
+        print(f"{self.name} - Step 1 / 8 - Collecting Playlist Tracks and Artists. . .")
+        self.collect_playlist_info()
         
-        print("Collecting track info.")
-        self.prepare_input_track_list()
+        print(f"{self.name} - Step 2 / 8 - Collecting Artist info. . .")
+        self.collect_artist_info()
+
+        print(f"{self.name} - Step 3 / 8 - Collecting Albums . . .")
+        self.collect_album_info()
+
+        print(f"{self.name} - Step 4 / 8 - Collecting Eligible Tracks . . .")
+        self.collect_storm_tracks()
+
+        print(f"{self.name} - Step 5 / 8 - Filtering Track List . . .")
+        self.filter_storm_tracks()
+
+        print(f"{self.name} - Step 6 / 8 - Handing off to Weatherboy . . . ")
+        self.call_weatherboy()
+
+        print(f"{self.name} - Step 7 / 8 - Writing to Spotify . . .")
+        self.write_storm_tracks()
+
+        print(f"{self.name} - Step 8 / 8 - Saving Storm Run . . .")
+        self.save_run_record()
+
+        print(f"{self.name} - Complete!\n")
     
     # Object Based orchestration
-    def prepare_playlists(self):
+    def collect_playlist_info(self):
         """
         Initial Playlist setup orchestration
         """
@@ -249,14 +294,26 @@ class StormRunner:
 
         print("Playlists Prepared. \n")
 
-    def prepare_input_track_list(self):
+    def collect_artist_info(self):
         """
-        Collects artists from track list
+        Loads in the data from the run_records artists
         """
 
-        # First check in the db for track info
-        tracks_collected = []
-        artists = self.sc.get_artists_from_tracks(self.run_record['input_tracks'])
+        # get data for artists we don't know
+        known_artists = self.sdb.get_known_artist_ids()
+        new_artists = [x for x in self.run_record['input_artists'] if x not in known_artists]
+
+        if len(new_artists) > 0:
+            print(f"{len(new_artists)} New Artists Found! Getting their info now.")
+            new_artist_info = self.sc.get_artists_info(new_artists)
+            self.sdb.update_artists(new_artist_info)
+        
+        else:
+            print("No new Artists found.")
+
+        print("Artist Info Collection Done.\n")
+
+
 
     # Low Level orchestration
     def load_playlist(self, playlist_id):
@@ -272,13 +329,13 @@ class StormRunner:
                             'last_collected':self.run_date}
 
             playlist_record['info'] = self.sc.get_playlist_info(playlist_id)
-            playlist_record['tracks'] = np.unique(self.sc.get_playlist_tracks(playlist_id))
-            playlist_record['artists'] = self.sc.get_playlist_artists(playlist_record['tracks'])
+            playlist_record['tracks'] = self.sc.get_playlist_tracks(playlist_id)
+            playlist_record['artists'] = self.sc.get_artists_from_tracks(playlist_record['tracks'])
 
             # Update run record
             self.run_record['playlists'].append(playlist_id)
-            self.run_record['input_tracks'].extend([x for x in playlist_record['tracks'] if x not in run_record['input_tracks'])
-            self.run_record['input_artists'].extend([x for x in playlist_record['artists'] if x not in run_record['input_artists']])
+            self.run_record['input_tracks'].extend([x for x in playlist_record['tracks'] if x not in self.run_record['input_tracks']])
+            self.run_record['input_artists'].extend([x for x in playlist_record['artists'] if x not in self.run_record['input_artists']])
 
             print("Writing changes to DB")
             self.sdb.update_playlist(playlist_record)
