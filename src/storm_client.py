@@ -34,6 +34,7 @@ class StormDB:
         self.storms = self.db['storm_metadata']
         self.tracks = self.db['tracks']
         self.playlists = self.db['playlists']
+        self.runs = self.db['runs']
 
     def get_config(self, storm_name):
         """
@@ -57,6 +58,21 @@ class StormDB:
         r = list(self.storms.find(q, cols))
 
         return [x['name'] for x in r]
+
+    def get_last_run(self, storm_name):
+        """
+        returns the run_record from last storm run under a given name
+        """
+        q = {"name":storm_name}
+        cols = {}
+        r = list(self.runs.find(q, cols))
+
+        if len(r) == 0:
+            return None
+        elif len(r) > 0:
+            max_run_idx = np.argmax(np.array([dt.datetime(x['run_date']) for x in r]))
+            return r[max_run_idx]
+
 
     # Playlist
     def get_playlist_collection_date(self, playlist_id):
@@ -131,7 +147,7 @@ class StormDB:
         cols = {"_id":1}
         r = list(self.artists.find(q, cols))
 
-        return r
+        return [x['_id'] for x in r]
 
     def update_artists(self, artist_info):
         """
@@ -140,8 +156,14 @@ class StormDB:
 
         for artist in tqdm(artist_info):
             q = {"_id":artist['id']}
-            self.artists.update(q, {"$set":artist_info}, upsert=True)
 
+            # Writing updates (formatting changes)
+            artist['last_updated'] = dt.datetime.now().strftime('%Y-%m-%d')
+            artist['total_followers'] = artist['followers']['total']
+            del artist['followers']
+            del artist['id']
+
+            self.artists.update_one(q, {"$set":artist}, upsert=True)
 
 
 class StormClient:
@@ -276,11 +298,12 @@ class StormRunner:
         # metadata
         self.run_date = dt.datetime.now().strftime('%Y-%m-%d')
         self.run_record = {'config':self.config, 
+                           'storm_name':self.name,
                            'run_date':self.run_date,
                            'playlists':[],
                            'input_tracks':[],
                            'input_artists':[]}
-        #!!!!!!!! self.last_run = self.sdb.get_last_run(storm_name)
+        self.last_run = self.sdb.get_last_run(self.name)
 
         print(f"{self.name} Started Successfully!\n")
         #self.Run()
@@ -289,6 +312,9 @@ class StormRunner:
         """
         Storm Orchestration based on a configuration.
         """
+
+        print(f"{self.name} - Step 0 / 8 - Initializing using last run.")
+        self.load_last_run()
 
         print(f"{self.name} - Step 1 / 8 - Collecting Playlist Tracks and Artists. . .")
         self.collect_playlist_info()
@@ -317,6 +343,19 @@ class StormRunner:
         print(f"{self.name} - Complete!\n")
     
     # Object Based orchestration
+    def load_last_run(self):
+        """
+        Loads in relevant information from last run.
+        """
+
+        if self.last_run is None:
+            print("Storm is new, nothing to load")
+
+        else:
+            print("Appending last runs tracks and artists.")
+            self.run_record['input_tracks'].extend(self.last_run['input_tracks'])
+            self.run_record['input_artists'].extend(self.last_run['input_artists'])
+
     def collect_playlist_info(self):
         """
         Initial Playlist setup orchestration
@@ -340,7 +379,6 @@ class StormRunner:
         
         # Check what songs remain in sample and full delivery
        
-
         print("Playlists Prepared. \n")
 
     def collect_artist_info(self):
@@ -354,7 +392,7 @@ class StormRunner:
 
         if len(new_artists) > 0:
             print(f"{len(new_artists)} New Artists Found! Getting their info now.")
-            new_artist_info = self.sc.get_artists_info(new_artists)
+            new_artist_info = self.sc.get_artist_info(new_artists)
 
             print("Writing their info to DB . . .")
             self.sdb.update_artists(new_artist_info)
@@ -363,8 +401,6 @@ class StormRunner:
             print("No new Artists found.")
 
         print("Artist Info Collection Done.\n")
-
-
 
     # Low Level orchestration
     def load_playlist(self, playlist_id):
