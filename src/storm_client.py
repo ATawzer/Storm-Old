@@ -165,7 +165,60 @@ class StormDB:
 
             self.artists.update_one(q, {"$set":artist}, upsert=True)
 
-    def update_albums(self, albums):
+    def get_artists_for_album_collection(self, max_date):
+        """
+        returns all artists with album collection dates before max_date.
+        """
+        q = {}
+        cols = {"_id":1, "albums_last_collected":1}
+        r = list(self.artists.find(q, cols))
+
+        # Only append artists who need collection in result
+        result = []
+        for artist in r:
+            if 'albums_last_collected' in artist.keys():
+                if artist['albums_last_collected'] < max_date:
+                    result.append(artist['_id'])
+            else:
+                result.append(artist['_id'])
+        return result
+
+    def update_artist_album_collected_date(self, artist_ids):
+        """
+        Updates a list of artists album_collected date to today.
+        """
+        date = dt.datetime.now().strftime('%Y-%m-%d')
+
+        for artist_id in tqdm(artist_ids):
+            q = {"_id":artist_id}
+            self.artists.update_one(q, {"$set":{"album_last_collected":date}}, upsert=True)
+
+    # Albums
+    def update_albums(self, album_info):
+        """
+        update album info if needed.
+        """
+
+        for album in tqdm(album_info):
+            q = {"_id":album['id']}
+
+            # Writing updates (formatting changes)
+            album['last_updated'] = dt.datetime.now().strftime('%Y-%m-%d')
+            del album['id']
+
+            self.albums.update_one(q, {"$set":album}, upsert=True)
+
+    def get_albums_by_release_date(self, start_date, end_date):
+        """
+        Get all albums in date window
+        """
+        q = {"release_date":{"$gte": start_date, "$lt": end_date}}
+        cols = {"_id":1}
+        r = list(sdb.albums.find(q, cols))
+
+        return [x['_id'] for x in r]
+
+    
 
 
 
@@ -284,6 +337,39 @@ class StormClient:
 
         return result
 
+    def get_artist_albums(self, artists):
+        """
+        Returns subset of album fields
+        """
+
+        # Call info
+        lim = 50
+        offset = 0
+        album_types = 'single,album'
+        country='US'
+        keys = ['album_type', 'album_group', 'id', 'name', 'release_date', "artists", 'total_tracks']
+
+        # Get All artist info
+        result = []
+        for artist in tqdm(artists):
+
+            # Initialize array for speed
+            self.refresh_connection()
+            total = int(self.sp.artist_albums(artist, country=country, album_type=album_types, limit=1)['total'])
+
+            artist_result = ['' for x in range(total)] # List of album ids pre-initialized
+            for i in range(int(np.ceil(total/lim))):
+                self.refresh_connection()
+                response = self.sp.artist_albums(artist, country=country, album_type=album_types, limit=lim, offset=(i*lim))
+                artist_result[i*lim:(i*lim)+len(response['items'])] = [{k: x[k] for k in keys} for x in response['items']]
+
+            result.extend(artist_result)
+
+        # Remove all other info about artists except ids
+        for i in range(len(result)):
+            result[i]['artists'] = [x['id'] for x in result[i]['artists']]
+
+        return result
 
 
 class StormRunner:
@@ -410,20 +496,20 @@ class StormRunner:
         Get and update all albums associated with the artists
         """
 
-        # Get a list of all artists in need of album collection
-        collected = self.sdb.get_artists_for_album_collection(max_date)
-        to_collect = [x for x in self.run_record['input_artists'] if x not in collected]
+        # Get a list of all artists in storm that need album collection
+        needs_collection = self.sdb.get_artists_for_album_collection(self.run_date)
+        to_collect = [x for x in self.run_record['input_artists'] if x in needs_collection]
+        new_albums = []
 
         # Get their albums
         if len(to_collect) == 0:
-            print("Artist Albums already acquired today.")
+            print("Evey Input Artist's Albums already acquired today.")
         else:
             print(f"New albums to collect for {len(to_collect)} artists.")
-            new_albums = self.sc.get_artist_albums(to_collect)
-            self.sdb.update_artist_album_collected_date(run_record['input_artists'])
+            print("Collecting data in batches from API and Updating DB.")
+            self.load_artist_albums(to_collect)
 
-        # Update them in DB
-        self.sdb.update_albums(new_albums)
+        print("Album Collection Done. \n")
 
     # Low Level orchestration
     def load_playlist(self, playlist_id):
@@ -457,7 +543,19 @@ class StormRunner:
         self.run_record['input_tracks'].extend([x for x in input_tracks if x not in self.run_record['input_tracks']])
         self.run_record['input_artists'].extend([x for x in input_artists if x not in self.run_record['input_artists']])
 
-        
+    def load_artist_albums(self, artists):
+        """
+        Get many artists information in batches and write back to database incrementally.
+        """
+        batch_size = 20
+        batches = np.array_split(artists, int(np.ceil(len(artists)/batch_size)))
+
+        print(f"Batch Size: {batch_size} | Number of Batches {len(batches)}")
+        for batch in tqdm(batches):
+
+            batch_albums = self.sc.get_artist_albums(batch)
+            self.sdb.update_albums(batch_albums)
+            self.sdb.update_artist_album_collected_date(batch)
         
         
 class Storm:
