@@ -165,6 +165,9 @@ class StormDB:
 
             self.artists.update_one(q, {"$set":artist}, upsert=True)
 
+    def update_albums(self, albums):
+
+
 
 class StormClient:
 
@@ -401,6 +404,26 @@ class StormRunner:
             print("No new Artists found.")
 
         print("Artist Info Collection Done.\n")
+
+    def collect_album_info(self):
+        """
+        Get and update all albums associated with the artists
+        """
+
+        # Get a list of all artists in need of album collection
+        collected = self.sdb.get_artists_for_album_collection(max_date)
+        to_collect = [x for x in self.run_record['input_artists'] if x not in collected]
+
+        # Get their albums
+        if len(to_collect) == 0:
+            print("Artist Albums already acquired today.")
+        else:
+            print(f"New albums to collect for {len(to_collect)} artists.")
+            new_albums = self.sc.get_artist_albums(to_collect)
+            self.sdb.update_artist_album_collected_date(run_record['input_artists'])
+
+        # Update them in DB
+        self.sdb.update_albums(new_albums)
 
     # Low Level orchestration
     def load_playlist(self, playlist_id):
