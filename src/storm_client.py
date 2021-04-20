@@ -218,6 +218,20 @@ class StormDB:
 
         return [x['_id'] for x in r]
 
+    def get_albums_for_track_collection(self):
+        """
+        Get all albums that need tracks added.
+        """
+        q = {}
+        cols = {"_id":1, "tracks":1}
+        r = list(self.albums.find(q, cols))
+
+        # Only append artists who need collection in result
+        result = []
+        for album in r:
+            if 'tracks' not in album.keys():
+                result.append(album['_id'])
+        return result
     
 
 
@@ -371,6 +385,36 @@ class StormClient:
 
         return result
 
+    def get_album_info(self, albums):
+        """
+        Returns an albums info and tracks.
+        """
+        # Call info
+        lim = 50
+        country = 'US'
+        keys = ['genres', 'tracks', 'id', 'name', 'popularity']
+
+        # Get All artist info
+        result = []
+        for album in tqdm(albums):
+
+            # Initialize array for speed
+            self.refresh_connection()
+            total = int(self.sp.album_tracks(artist, country=country, limit=1)['total'])
+
+            album_result = ['' for x in range(total)] # List of album ids pre-initialized
+            for i in range(int(np.ceil(total/lim))):
+                self.refresh_connection()
+                response = self.sp.album_tracks(artist, country=country, limit=lim, offset=(i*lim))
+                album_result[i*lim:(i*lim)+len(response['items'])] = [{k: x[k] for k in keys} for x in response['tracks']]
+
+            result.extend(artist_result)
+
+        # Remove all other info about artists except ids
+        for i in range(len(result)):
+            result[i]['artists'] = [x['id'] for x in result[i]['artists']]
+
+        return result
 
 class StormRunner:
     """
@@ -495,20 +539,13 @@ class StormRunner:
         """
         Get and update all albums associated with the artists
         """
-
-        # Get a list of all artists in storm that need album collection
-        needs_collection = self.sdb.get_artists_for_album_collection(self.run_date)
-        to_collect = [x for x in self.run_record['input_artists'] if x in needs_collection]
-        new_albums = []
-
-        # Get their albums
-        if len(to_collect) == 0:
-            print("Evey Input Artist's Albums already acquired today.")
-        else:
-            print(f"New albums to collect for {len(to_collect)} artists.")
-            print("Collecting data in batches from API and Updating DB.")
-            self.load_artist_albums(to_collect)
-
+        
+        print("Getting the albums for Input Artists that haven't been acquired.")
+        self.collect_artist_albums()
+        
+        print("Getting tracks for albums that need it")
+        self.collect_album_tracks()
+    
         print("Album Collection Done. \n")
 
     # Low Level orchestration
@@ -556,6 +593,31 @@ class StormRunner:
             batch_albums = self.sc.get_artist_albums(batch)
             self.sdb.update_albums(batch_albums)
             self.sdb.update_artist_album_collected_date(batch)
+
+    def collect_artist_albums(self):
+        """
+        Get artist albums for input artists that need it.
+        """
+        # Get a list of all artists in storm that need album collection
+        needs_collection = self.sdb.get_artists_for_album_collection(self.run_date)
+        to_collect = [x for x in self.run_record['input_artists'] if x in needs_collection]
+
+        # Get their albums
+        if len(to_collect) == 0:
+            print("Evey Input Artist's Albums already acquired today.")
+        else:
+            print(f"New albums to collect for {len(to_collect)} artists.")
+            print("Collecting data in batches from API and Updating DB.")
+            self.load_artist_albums(to_collect)
+
+    def collect_album_tracks(self):
+        """
+        Gets tracks for every album that needs them, not just storm.
+        In the case of new storms this helps populate historical.
+        In the case of existing ones it will only be the storm albums that need collection.
+        """
+        needs_collection = self.sdb.get_artists_for_album_collection(self.run_date)
+        to_collect = [x for x in self.run_record['input_artists'] if x in needs_collection]
         
         
 class Storm:
