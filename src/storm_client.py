@@ -282,7 +282,21 @@ class StormDB:
                 if not track['audio_features']:
                     result.append(track['_id'])
         return result
-            
+
+    def update_bad_track_features(self, bad_tracks):
+        """
+        If tracks that can't get features are identified, mark them here
+        """
+        for track in tqdm(bad_tracks):
+            q = {"_id":track['id']}
+
+            # Writing updates (formatting changes)
+            track['audio_features'] = False
+            track['last_updated'] = dt.datetime.now().strftime('%Y-%m-%d')
+            del track['id']
+
+            self.tracks.update_one(q, {"$set":track}, upsert=True)
+
 
 
 
@@ -484,7 +498,7 @@ class StormClient:
         for batch in tqdm(batches):
             self.refresh_connection()
             response = self.sp.audio_features(batch)
-            result.extend([{k: x[k] for k in keys} for x in response])
+            result.extend([{k: x[k] for k in keys} for x in response if x is not None])
 
         # Filter to just ids
         return result
