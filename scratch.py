@@ -4,14 +4,21 @@ sr = StormRunner('film_vg_instrumental')
 sr.load_last_run()
 sr.collect_playlist_info()
 sr.collect_artist_info()
+
+sr.run_date = '2021-04-20'
 sr.collect_album_info()
 
 sdb = StormDB()
+test = sdb.get_albums_for_track_collection()
 sdb.get_albums_by_release_date('2021-04-01', '2021-04-05')
 
 
 
 sc = StormClient('1241528689')
+test = sc.get_album_tracks(['0SD8viWtxULmEuPEHkaYQg', '1B2QrHbMox8vPXUY7rXAFp'])
+sdb.update_tracks(test)
+
+
 test = sc.get_artist_albums(["0360rTDeUjEyBXaz2Ki00a",
 "07vycW8ICLf5hKb22PFWXw",
 "0HDxlFsXwyrpufs4YgTNMm",
@@ -41,3 +48,14 @@ from_date = dt.datetime.strptime('2021-04-01', '%Y-%m-%d')
 to_date = dt.datetime.strptime('2021-04-05', '%Y-%m-%d')
 
 list(sdb.albums.find({"release_date": {"$gte": '2021-04-01', "$lt": '2021-04-05'}}))
+
+# Putting scraped tracks on to their albums
+sdb = StormDB()
+q = {}
+cols = {"last_updated":0}
+r = list(sdb.tracks.find(q, cols))
+
+for x in r:
+    x["id"] = x.pop("_id")
+
+sdb.update_tracks(r)

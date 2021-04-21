@@ -176,8 +176,8 @@ class StormDB:
         # Only append artists who need collection in result
         result = []
         for artist in r:
-            if 'albums_last_collected' in artist.keys():
-                if artist['albums_last_collected'] < max_date:
+            if 'album_last_collected' in artist.keys():
+                if artist['album_last_collected'] < max_date:
                     result.append(artist['_id'])
             else:
                 result.append(artist['_id'])
@@ -233,6 +233,57 @@ class StormDB:
                 result.append(album['_id'])
         return result
     
+    # Tracks
+    def update_tracks(self, track_info):
+        """
+        update track and its album info if needed.
+        """
+
+        for track in tqdm(track_info):
+
+            # Add track to album record
+            q = {'_id':track['album_id']}
+            self.albums.update_one(q, {"$push":{"tracks":track['id']}}, upsert=True)
+
+            # Add track data to tracks
+            q = {"_id":track['id']}
+            track['last_updated'] = dt.datetime.now().strftime('%Y-%m-%d')
+            del track['id']
+            self.tracks.update_one(q, {"$set":track}, upsert=True)
+
+    def update_track_features(self, tracks):
+        """
+        Updates a track's record with audio features
+        """
+        for track in tqdm(tracks):
+            q = {"_id":track['id']}
+
+            # Writing updates (formatting changes)
+            track['audio_features'] = True
+            track['last_updated'] = dt.datetime.now().strftime('%Y-%m-%d')
+            del track['id']
+
+            self.tracks.update_one(q, {"$set":track}, upsert=True)
+
+    def get_tracks_for_feature_collection(self):
+        """
+        Get all tracks that need audio features added.
+        """
+        q = {}
+        cols = {"_id":1, "audio_features":1}
+        r = list(self.tracks.find(q, cols))
+
+        # Only append artists who need collection in result
+        result = []
+        for track in r:
+            if 'audio_features' not in track.keys():
+                result.append(track['_id'])
+            else:
+                if not track['audio_features']:
+                    result.append(track['_id'])
+        return result
+            
+
 
 
 
@@ -385,30 +436,32 @@ class StormClient:
 
         return result
 
-    def get_album_info(self, albums):
+    def get_album_tracks(self, albums):
         """
         Returns an albums info and tracks.
         """
         # Call info
         lim = 50
         country = 'US'
-        keys = ['genres', 'tracks', 'id', 'name', 'popularity']
+        keys = ['artists', 'duration_ms', 'id', 'name', 'explicit', 'track_number']
 
-        # Get All artist info
+        # Get All album tracks info
         result = []
         for album in tqdm(albums):
 
             # Initialize array for speed
             self.refresh_connection()
-            total = int(self.sp.album_tracks(artist, country=country, limit=1)['total'])
+            total = int(self.sp.album_tracks(album, market=country, limit=1)['total'])
 
             album_result = ['' for x in range(total)] # List of album ids pre-initialized
             for i in range(int(np.ceil(total/lim))):
                 self.refresh_connection()
-                response = self.sp.album_tracks(artist, country=country, limit=lim, offset=(i*lim))
-                album_result[i*lim:(i*lim)+len(response['items'])] = [{k: x[k] for k in keys} for x in response['tracks']]
+                response = self.sp.album_tracks(album, market=country, limit=lim, offset=(i*lim))               
+                album_result[i*lim:(i*lim)+len(response['items'])] = [{k: x[k] for k in keys} for x in response['items']]
 
-            result.extend(artist_result)
+            # Add the album_id back in
+            [x.update({'album_id':album}) for x in album_result]
+            result.extend(album_result)
 
         # Remove all other info about artists except ids
         for i in range(len(result)):
@@ -455,11 +508,11 @@ class StormRunner:
         print(f"{self.name} - Step 2 / 8 - Collecting Artist info. . .")
         self.collect_artist_info()
 
-        print(f"{self.name} - Step 3 / 8 - Collecting Albums . . .")
+        print(f"{self.name} - Step 3 / 8 - Collecting Albums and their Tracks. . .")
         self.collect_album_info()
 
-        print(f"{self.name} - Step 4 / 8 - Collecting Eligible Tracks . . .")
-        self.collect_storm_tracks()
+        print(f"{self.name} - Step 4 / 8 - Collecting Track Features . . .")
+        self.collect_track_features()
 
         print(f"{self.name} - Step 5 / 8 - Filtering Track List . . .")
         self.filter_storm_tracks()
@@ -548,6 +601,45 @@ class StormRunner:
     
         print("Album Collection Done. \n")
 
+    def collect_track_features(self):
+        """
+        Gets all track features needed
+        Also in a while try except loop to get through all tracks in the case of bad batches.
+        """
+
+        to_collect = self.sdb.get_tracks_for_feature_collection(self)
+        batch_size = 100
+        batches = np.array_split(to_collect, int(np.ceil(len(to_collect)/batch_size)))
+
+        # Attempt to go get the batches
+        bad_batch_retries = 0
+        consecutive_bad_batches_limit = 10
+        retry_limit = 5
+        while (bad_batch_retries < retry_limit) & (len(batches) > 0):
+
+            consecutive_bad_batches = 0
+            print(f"Batch Size: {batch_size} | Number of Batches {len(batches)}")
+            for i, batch in enumerate(tqdm(batches)):
+
+                if consecutive_bad_batches > consecutive_bad_batches_limit:
+                    raise Exception(f"{consecutive_bad_batches_limit} consecutive bad batches. . . Terminating Process.")
+                try:
+                    batch_tracks = self.sc.get_track_features(batch)
+                    self.sdb.update_track_features(batch_tracks)
+
+                    # Successful, does not need collection
+                    consecutive_bad_batches = 0
+                    del batches[i]
+
+                except:
+                    print("Bad Batch, will try again after.")
+                    consecutive_bad_batches += 1
+
+            bad_batch_retries += 1
+        
+        print("All Track batches collected!")
+        print("Eligible Track Collection Done! \n")
+
     # Low Level orchestration
     def load_playlist(self, playlist_id):
         """
@@ -615,10 +707,44 @@ class StormRunner:
         Gets tracks for every album that needs them, not just storm.
         In the case of new storms this helps populate historical.
         In the case of existing ones it will only be the storm albums that need collection.
+        Given the intensity, try except implemented to retry bad batches
         """
-        needs_collection = self.sdb.get_artists_for_album_collection(self.run_date)
-        to_collect = [x for x in self.run_record['input_artists'] if x in needs_collection]
+        needs_collection = self.sdb.get_albums_for_track_collection()
+        batch_size = 20
+        batches = np.array_split(needs_collection, int(np.ceil(len(needs_collection)/batch_size)))
+
+        # Attempt to go get the batches
+        bad_batch_retries = 0
+        consecutive_bad_batches_limit = 10
+        retry_limit = 5
+        while (bad_batch_retries < retry_limit) & (len(batches) > 0):
+
+            consecutive_bad_batches = 0
+            print(f"Batch Size: {batch_size} | Number of Batches {len(batches)}")
+            for i, batch in enumerate(tqdm(batches)):
+
+                if consecutive_bad_batches > consecutive_bad_batches_limit:
+                    raise Exception(f"{consecutive_bad_batches_limit} consecutive bad batches. . . Terminating Process.")
+                try:
+                    batch_tracks = self.sc.get_album_tracks(batch)
+                    self.sdb.update_tracks(batch_tracks)
+
+                    # Successful, does not need collection
+                    consecutive_bad_batches = 0
+                    del batches[i]
+
+                except:
+                    print("Bad Batch, will try again after.")
+                    consecutive_bad_batches += 1
+
+            bad_batch_retries += 1
         
+        print("All album batches collected!")
+
+    
+
+
+
         
 class Storm:
     """
