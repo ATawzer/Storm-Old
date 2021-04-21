@@ -170,7 +170,7 @@ class StormDB:
         returns all artists with album collection dates before max_date.
         """
         q = {}
-        cols = {"_id":1, "albums_last_collected":1}
+        cols = {"_id":1, "album_last_collected":1}
         r = list(self.artists.find(q, cols))
 
         # Only append artists who need collection in result
@@ -469,6 +469,27 @@ class StormClient:
 
         return result
 
+    def get_track_features(self, tracks):
+        """
+        Returns a tracks info and audio features
+        """
+        # Call info
+        id_lim = 50
+        keys = ["id", "danceability", "energy", "key", "loudness", "mode", "speechiness", "acousticness",
+        "instrumentalness", "liveness", "valence", "tempo", "time_signature"]
+        batches = np.array_split(tracks, int(np.ceil(len(tracks)/id_lim)))
+
+        # Get track features in batches
+        result = []
+        for batch in tqdm(batches):
+            self.refresh_connection()
+            response = self.sp.audio_features(batch)
+            result.extend([{k: x[k] for k in keys} for x in response])
+
+        # Filter to just ids
+        return result
+
+
 class StormRunner:
     """
     Orchestrates a storm run
@@ -606,9 +627,13 @@ class StormRunner:
         Gets all track features needed
         Also in a while try except loop to get through all tracks in the case of bad batches.
         """
+        
+        to_collect = self.sdb.get_tracks_for_feature_collection()
+        if len(to_collect) == 0:
+            print("No Track Features to collect.")
+            return True
 
-        to_collect = self.sdb.get_tracks_for_feature_collection(self)
-        batch_size = 100
+        batch_size = 1000
         batches = np.array_split(to_collect, int(np.ceil(len(to_collect)/batch_size)))
 
         # Attempt to go get the batches
@@ -617,9 +642,10 @@ class StormRunner:
         retry_limit = 5
         while (bad_batch_retries < retry_limit) & (len(batches) > 0):
 
+            bad_batches = []
             consecutive_bad_batches = 0
             print(f"Batch Size: {batch_size} | Number of Batches {len(batches)}")
-            for i, batch in enumerate(tqdm(batches)):
+            for batch in tqdm(batches):
 
                 if consecutive_bad_batches > consecutive_bad_batches_limit:
                     raise Exception(f"{consecutive_bad_batches_limit} consecutive bad batches. . . Terminating Process.")
@@ -629,16 +655,20 @@ class StormRunner:
 
                     # Successful, does not need collection
                     consecutive_bad_batches = 0
-                    del batches[i]
 
                 except:
                     print("Bad Batch, will try again after.")
+                    bad_batches.append(batch)
                     consecutive_bad_batches += 1
+
+            bad_batch_retries += 1
+            batches = bad_batches
 
             bad_batch_retries += 1
         
         print("All Track batches collected!")
-        print("Eligible Track Collection Done! \n")
+        print("Track Collection Done! \n")
+        return True
 
     # Low Level orchestration
     def load_playlist(self, playlist_id):
@@ -711,6 +741,10 @@ class StormRunner:
         """
         needs_collection = self.sdb.get_albums_for_track_collection()
         batch_size = 20
+        if len(needs_collection) == 0:
+            print("No Albums needed to collect.")
+            return True
+
         batches = np.array_split(needs_collection, int(np.ceil(len(needs_collection)/batch_size)))
 
         # Attempt to go get the batches
@@ -719,9 +753,10 @@ class StormRunner:
         retry_limit = 5
         while (bad_batch_retries < retry_limit) & (len(batches) > 0):
 
+            bad_batches = []
             consecutive_bad_batches = 0
             print(f"Batch Size: {batch_size} | Number of Batches {len(batches)}")
-            for i, batch in enumerate(tqdm(batches)):
+            for batch in tqdm(batches):
 
                 if consecutive_bad_batches > consecutive_bad_batches_limit:
                     raise Exception(f"{consecutive_bad_batches_limit} consecutive bad batches. . . Terminating Process.")
@@ -731,20 +766,19 @@ class StormRunner:
 
                     # Successful, does not need collection
                     consecutive_bad_batches = 0
-                    del batches[i]
 
                 except:
                     print("Bad Batch, will try again after.")
+                    bad_batches.append(batch)
                     consecutive_bad_batches += 1
 
             bad_batch_retries += 1
+            batches = bad_batches
         
         print("All album batches collected!")
+        return True
 
     
-
-
-
         
 class Storm:
     """
@@ -769,8 +803,7 @@ class Storm:
         for storm_name in self.storm_names:
             self.runners[storm_name] = StormRunner(storm_name)
 
-# A class to manage all of the storm functions and authentication
-class StormOld:
+
     """
     Single object for running and saving data frm the storm run. Call Storm.Run() to generate a playlist from
     saved artists.
