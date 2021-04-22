@@ -35,6 +35,7 @@ class StormDB:
         self.tracks = self.db['tracks']
         self.playlists = self.db['playlists']
         self.runs = self.db['runs']
+        self.blacklists = self.db['blacklists']
 
     def get_config(self, storm_name):
         """
@@ -193,6 +194,24 @@ class StormDB:
             q = {"_id":artist_id}
             self.artists.update_one(q, {"$set":{"album_last_collected":date}}, upsert=True)
 
+    def get_blacklist(self, name):
+        """
+        Returns a full blacklist record by name (id)
+        """
+        q = {"_id":name}
+        cols = {"_id":1, "blacklist":1, "type":1}
+        return list(self.blacklists.find(q, cols))
+
+    def get_artists_by_genres(self, genres):
+        """
+        Gets a list artists in DB that have one or more of the genres
+        """
+        q = {"genres":{"$all":genres}}
+        cols = {"_id":1}
+        r = list(self.artists.find(q, cols))
+
+        return [x["_id"] for x in r]
+
     # Albums
     def update_albums(self, album_info):
         """
@@ -297,7 +316,27 @@ class StormDB:
 
             self.tracks.update_one(q, {"$set":track}, upsert=True)
 
+    # DB Cleanup and Prep
+    def update_artist_albums(self):
+        """
+        Adds a track list to each artist or appends if not there
+        """
 
+        q = {}
+        cols = {"_id":1, "added_to_artists":1, 'artists':1}
+        r = list(self.albums.find(q, cols))
+
+        for album in tqdm(r):
+
+            if 'added_to_artists' not in album.keys():
+                for artist in album['artists']:
+                    self.artists.update_one({"_id":artist}, {"$addToSet":{"albums":album["_id"]}}, upsert=True)
+                self.albums.update_one({"_id":album["_id"]}, {"$set":{"added_to_artists":True}})
+            else:
+                if not album['added_to_artists']:
+                    for artist in album['artists']:
+                        self.artists.update_one({"_id":artist}, {"$addToSet":{"albums":album["_id"]}}, upsert=True)
+                    self.albums.update_one({"_id":album["_id"]}, {"$set":{"added_to_artists":True}})
 
 
 
@@ -522,8 +561,13 @@ class StormRunner:
                            'storm_name':self.name,
                            'run_date':self.run_date,
                            'playlists':[],
-                           'input_tracks':[],
-                           'input_artists':[]}
+                           'input_tracks':[], # Determines what gets collected
+                           'input_artists':[], # Determines what gets collected, also 'egligible' artists
+                           'eligible_tracks':[], # Tracks that could be delivered before track filters
+                           'storm_tracks':[], # Tracks actually written out
+                           'storm_artists':[], # Used for track filtering
+                           'storm_albums':[] # Release Date Filter
+                           }
         self.last_run = self.sdb.get_last_run(self.name)
 
         print(f"{self.name} Started Successfully!\n")
@@ -684,6 +728,26 @@ class StormRunner:
         print("Track Collection Done! \n")
         return True
 
+    def filter_storm_tracks(self):
+        """
+        Get a List of tracks to deliver.
+        """
+
+        print("Filtering out bad artists.")
+        self.apply_artist_filters()
+
+        print("Obtaining all albums from storm artists.")
+        self.run_record['storm_albums'] = self.sdb.get_albums_from_artists_by_date(self.run_record['storm_artists'], self.start_date)
+
+        print("Getting tracks from albums.")
+        self.sdb.get_tracks_from_albums()
+
+        print("Filtering Tracks.")
+        self.apply_track_filters()
+
+        print("Storm Tracks Generated! \n")
+
+
     # Low Level orchestration
     def load_playlist(self, playlist_id):
         """
@@ -691,7 +755,7 @@ class StormRunner:
         """
 
         # Determine if playlists need examining
-        if self.run_date != self.sdb.get_playlist_collection_date(playlist_id):
+        if self.run_date > self.sdb.get_playlist_collection_date(playlist_id):
 
             # Acquire data
             playlist_record = {'_id':playlist_id, 
@@ -746,6 +810,9 @@ class StormRunner:
             print("Collecting data in batches from API and Updating DB.")
             self.load_artist_albums(to_collect)
 
+        print("Updating artist album association in DB.")
+        self.sdb.update_artist_albums()
+
     def collect_album_tracks(self):
         """
         Gets tracks for every album that needs them, not just storm.
@@ -792,8 +859,38 @@ class StormRunner:
         print("All album batches collected!")
         return True
 
-    
-        
+    def apply_artist_filters(self):
+        """
+        read in filters from configurations
+        """
+        filters = self.config['filters']['artist']
+        supported = ['genre', 'blacklist']
+        bad_artists = []
+
+        # Filters
+        print(f"{len(filters)} valid filters to apply")
+        for filter_name, filter_value in filters.items():
+            
+            print(f"Applying {filter_name}")
+            if filter_name == 'genre':
+                genre_artists = self.sdb.get_artists_by_genres(filter_value)
+                bad_artists.extend(genre_artists)
+
+            elif filter_name == 'blacklist':
+                blacklist = self.sdb.get_blacklist(filter_value)
+                if len(blacklist) == 0:
+                    print(f"{filter_value} not found, no filtering will be done.'")
+                else:
+                    print(f"{filter_value} found, removing.'")
+                    bad_artists.extend(blacklist[0]['blacklist'])
+            else:
+                print(f"{filter_name} not supported or misspelled. ")
+
+        self.run_record['storm_artists'] = [x for x in self.run_record['input_artists'] if x not in bad_artists]
+        print(f"Starting Artist Amount: {len(self.run_record['input_artists'])}")
+        print(f"Ending Artist Amount: {len(self.run_record['storm_artists'])}")
+        time.sleep(.5)
+
 class Storm:
     """
     Main callable that initiates and saves storm data

@@ -1,22 +1,29 @@
 storm = Storm(['film_vg_instrumental'])
 
 sr = StormRunner('film_vg_instrumental')
+sr.run_date = '2021-04-20'
 sr.load_last_run()
 sr.collect_playlist_info()
 sr.collect_artist_info()
-
-sr.run_date = '2021-04-20'
 sr.collect_album_info()
+#sr.collect_track_features()
+sr.filter_storm_tracks()
 
 sdb = StormDB()
-test = sdb.get_albums_for_track_collection()
-sdb.get_albums_by_release_date('2021-04-01', '2021-04-05')
+sdb.get_blacklist('instrumental_blacklist')
+test = sdb.get_tracks_for_feature_collection()
+#sdb.get_albums_by_release_date('2021-04-01', '2021-04-05')
 
 
+sdb = StormDB()
+sdb.update_artist_albums()
 
+sdb.artists.update_many({}, {"$unset":{"albums":1}})
+
+test = sdb.get_tracks_for_feature_collection()[:5]
 sc = StormClient('1241528689')
-test = sc.get_album_tracks(['0SD8viWtxULmEuPEHkaYQg', '1B2QrHbMox8vPXUY7rXAFp'])
-sdb.update_tracks(test)
+test_response = sc.get_track_features(test)
+sdb.update_track_features(test_response)
 
 
 test = sc.get_artist_albums(["0360rTDeUjEyBXaz2Ki00a",
