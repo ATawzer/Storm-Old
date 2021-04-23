@@ -11,12 +11,6 @@ import json
 
 # DB
 from pymongo import MongoClient
-from dotenv import load_dotenv
-
-# Internal
-from helper import *
-print = slow_print # for fun
-load_dotenv()
 
 class StormDB:
     """
@@ -736,7 +730,7 @@ class StormRunner:
         self.load_playlist(self.config['great_targets'])
 
         print("Loading Good Targets . . .")
-        self.load_playlist(self.config['great_targets'])
+        self.load_playlist(self.config['good_targets'])
 
         # Check for additional playlists
         if 'additional_input_playlists' in self.config.keys():
@@ -745,10 +739,12 @@ class StormRunner:
                     print(f"Loading Additional Playlist: {ap}")
                     self.load_playlist(ap_id)
         
-         ## ---- Future Version ----
-        # Check if we need to move rolling
-        
         # Check what songs remain in sample and full delivery
+        self.load_output_playlist(self.config['full_storm_delivery']['playlist'])
+
+        ## ---- Future Version ----
+        self.load_output_playlist(self.config['rolling_good']['playlist'])
+        # Check if we need to move rolling
        
         print("Playlists Prepared. \n")
 
@@ -918,6 +914,28 @@ class StormRunner:
         self.run_record['playlists'].append(playlist_id)
         self.run_record['input_tracks'].extend([x for x in input_tracks if x not in self.run_record['input_tracks']])
         self.run_record['input_artists'].extend([x for x in input_artists if x not in self.run_record['input_artists']])
+
+    def load_output_playlist(self, playlist_id):
+        """
+        Pulls down playlist info and writes it back to db
+        """
+
+        # Determine if playlists need examining
+        if self.run_date > self.sdb.get_playlist_collection_date(playlist_id):
+
+            # Acquire data
+            playlist_record = {'_id':playlist_id, 
+                            'last_collected':self.run_date}
+
+            playlist_record['info'] = self.sc.get_playlist_info(playlist_id)
+            playlist_record['tracks'] = self.sc.get_playlist_tracks(playlist_id)
+            playlist_record['artists'] = self.sc.get_artists_from_tracks(playlist_record['tracks'])
+
+            print("Writing changes to DB")
+            self.sdb.update_playlist(playlist_record)
+
+        else:
+            print("Skipping API Load, already collected today.")
 
     def load_artist_albums(self, artists):
         """
@@ -1102,9 +1120,7 @@ class Storm:
     def __init__(self, storm_names, start_date=None):
 
         self.print_initial_screen()
-        self.sdb = StormDB()
         self.storm_names = storm_names
-        self.runners = {}
 
     def print_initial_screen(self):
 
@@ -1116,5 +1132,3 @@ class Storm:
         print("Spinning up Storm Runners. . . ")
         for storm_name in self.storm_names:
             StormRunner(storm_name).Run()
-
-Storm(['film_vg_instrumental', 'contemporary_lyrical'])
