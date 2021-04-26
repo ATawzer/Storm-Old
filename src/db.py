@@ -233,7 +233,7 @@ class StormDB:
         """
         Get all albums in date window
         """
-        q = {"release_date":{"$gte": start_date, "$lte": end_date}}
+        q = {"release_date":{"$gt": start_date, "$lte": end_date}}
         cols = {"_id":1}
         r = list(sdb.albums.find(q, cols))
 
