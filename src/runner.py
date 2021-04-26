@@ -96,7 +96,7 @@ class StormRunner:
         else:
             print("Appending last runs tracks and artists.")
             self.run_record['input_tracks'].extend(self.last_run['input_tracks'])
-            self.run_record['input_artists'].extend(self.last_run['input_artists'])
+            self.run_record['input_artists'].extend(self.last_run['storm_artists']) # Post-filter
 
     def collect_playlist_info(self):
         """
