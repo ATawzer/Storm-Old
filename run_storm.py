@@ -7,8 +7,4 @@ print = slow_print # for fun
 from dotenv import load_dotenv
 load_dotenv()
 
-
-Storm(['contemporary_lyrical']).Run()
-
-
-test = StormDB().get_last_run('film_vg_instrumental')
+Storm(['film_vg_instrumental', 'contemporary_lyrical']).Run()
