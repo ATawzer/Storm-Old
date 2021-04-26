@@ -9,3 +9,6 @@ load_dotenv()
 
 
 Storm(['contemporary_lyrical']).Run()
+
+
+test = StormDB().get_last_run('film_vg_instrumental')
