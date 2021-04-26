@@ -8,4 +8,4 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-Storm(['film_vg_instrumental', 'contemporary_lyrical']).Run()
+Storm(['contemporary_lyrical']).Run()
