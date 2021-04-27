@@ -390,5 +390,17 @@ class StormDB:
                         self.artists.update_one({"_id":artist}, {"$addToSet":{"albums":album["_id"]}}, upsert=True)
                     self.albums.update_one({"_id":album["_id"]}, {"$set":{"added_to_artists":True}})
 
+class StormAnalyticsDB:
+    """
+    A StormDB wrapper dedicated to machine learning and general database analytics
+    """
 
+    def __init__(self):
+
+        self.sdb = StormDB()
+        #self.sql_db
+
+    def gen_playlist_health(self, playlist_id):
+
+        
     
