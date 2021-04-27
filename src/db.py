@@ -412,6 +412,7 @@ class StormDB:
         try:
             return list(self.tracks.find(q, cols))[0]['artists']
         except:
+            return []
             raise ValueError(f"Track {track} not found or doesn't have any artists.")
 
     # DB Cleanup and Prep
@@ -472,22 +473,33 @@ class StormAnalyticsDB:
         else:
             raise Exception(f"View {name} not in map.")
 
-    def gen_v_many_playlist_track_changes(self, playlist_ids=[], metric='Number of Tracks'):
+    def gen_v_many_playlist_track_changes(self, playlist_ids=[], index=False):
         """
         Cross-Compares many playlist track changes
         """
-        df = pd.DataFrame()
 
         if len(playlist_ids) == 0:
-            self.print("No playlists specified, returning all.")
+            self.print("No playlists specified, defaulting to all in DB.")
+            playlist_ids = self.sdb.get_playlists()
+        elif len(playlist_ids) == 1:
+            self.print("Only one playlist specified, returning single view.")
+            return self.gen_v_playlist_track_changes(playlist_ids[0])
 
+        # Generate the multiple view dataframe
+        df = pd.DataFrame()
+        self.print("Building and combining Playlist views")
+        for playlist_id in tqdm(playlist_ids):
 
-        #for playlist_id in playlist_ids:
+            playlist_df = self.gen_v_playlist_track_changes(playlist_id, index=False)
+            playlist_df['playlist'] = playlist_id
 
+            # Join it back in
+            df = pd.concat([df, playlist_df])
 
+        return df.set_index(['date_collected', 'playlist']) if index else df
 
     # Single object views - low-level
-    def gen_v_playlist_track_changes(self, playlist_id):
+    def gen_v_playlist_track_changes(self, playlist_id, index=False):
         """
         Generates a view of a playlists timely health
         """
@@ -500,10 +512,16 @@ class StormAnalyticsDB:
 
         # Compute Metrics
         for change in playlist_changelog:
+
+            # Tracks
             df.loc[change, 'Number of tracks'] = len(playlist_changelog[change]['tracks'])
 
-        return df
+            # Artists
+            artists = []
+            [artists.extend(self.sdb.get_track_artists(x)) for x in playlist_changelog[change]['tracks']]
+            df.loc[change, 'Number of Artists'] = len(np.unique(artists))
 
-    
+        # Metadata
+        df.index.rename('date_collected', inplace=True)
 
-    
+        return df if index else df.reset_index()
