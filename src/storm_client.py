@@ -11,125 +11,30 @@ import json
 
 # DB
 from pymongo import MongoClient
-from dotenv import load_dotenv
-load_dotenv()
 
-
-class StormClient:
+class StormUserClient:
 
     def __init__(self, user_id):
+        """
+        Client with authorization for modifying user information.
+        """
 
-        self.scope = 'user-follow-read playlist-modify-private playlist-modify-public user-follow-modify' # scope for permissions
-        self.user_id = user_id
+        self.user_id = user_id # User to authorize, only needed for modify operations
+        self.scope = 'playlist-modify-private playlist-modify-public' # scope for permissions
         self.client_id = os.getenv('storm_client_id') # API app id
         self.client_secret = os.getenv('storm_client_secret') # API app secret
 
-        # DB connection
-        self.mc = MongoClient(os.getenv('mongodb_uri'))
-        self.db = self.mc['storm']
-
-        # Spotify API connection
-        self.sp = None
-        self.token_end = None
-        self.get_token()
-
-    # Authentication
-    def get_token(self):
-
-        if os.path.exists('token.json'):
-            with json.load(open('token.json', "r")) as f:
-                if dt.datetime.fromtimestamp(f['expires']) < dt.datetime.now():
-                    self.token = f['token']
-                    self.token_end = f['expires']
-
-        else:
-            self.get_new_token()
-
-        self.sp = spotipy.Spotify(auth=self.token)
-
-    def get_new_token(self):
-
-        self.token = util.prompt_for_user_token(self.user_id,
-                                                    scope=self.scope,
-                                                    client_id=self.client_id,
-                                                    client_secret=self.client_secret,
-                                                    redirect_uri='http://localhost/')
-
-        self.token_end = dt.datetime.timestamp(dt.datetime.now() + dt.timedelta(minutes=59))
-        json.dump({'token':self.token, 'expires':str(self.token_end)}, open('token.json', 'w'))
-
-
-storm = StormClient('1241528689')
-
-
-# A class to manage all of the storm functions and authentication
-class Storm:
-    """
-    Single object for running and saving data frm the storm run. Call Storm.Run() to generate a playlist from
-    saved artists.
-    """
-    def __init__(self, user_id, inputs, output, archive, name, start_date=None, filter_unseen=True, instrumental=True):
-        """
-        params:
-            user_id - spotify user account number
-            inputs - Dictionary of playlists 'name':'playlist_id' that will feed new releases
-            output - Playlist id to save new releases to
-            archive - Playlist id to archive current songs in the storm to
-            name - A name for this storm setup (for saving metadata and allowing for multiple storm configurations)
-            start_date - defaults to a 2-day window frm current date, but could be wider if desired (format: 'yyyy-mm-dd')
-        """
-        # Variables
-        self.scope = 'user-follow-read playlist-modify-private playlist-modify-public user-follow-modify' # scope for permissions
-        self.user_id = user_id
-        self.client_id = os.getenv('client_id') # API app id
-        self.client_secret = os.getenv('client_secret') # API app secret
         self.token = None
-        self.token_start = None
-        self.sp = None
-        self.inputs = inputs
-        self.output = output
-        self.archive = archive
-        self.name = name
-        self.start_date = start_date
-        self.window_date = None
-        self.filter_unseen = filter_unseen
-        self.instrumental = instrumental
-        
-        # Initialization
+
+        # Authenticate
         self.authenticate()
-        self.gen_dates()
-        
-        # I/O Params for file saving
-        self.artist_id_csv = './data/storm_artists_'+self.name+'.csv'
-        self.album_id_csv = './data/storm_albums_'+self.name+'.csv'
-        self.md_name = './data/storm_run_metadata_'+self.name+'.csv'
-        
-        # Dataframe initialization
-        self.blacklist = []
-        self.artist_ids = []
-        self.album_ids = []
-        self.albums = pd.DataFrame(columns = ['album_group', 'album_type', 'artists', 'available_markets',
-                               'external_urls', 'href', 'id', 'images', 'name', 'release_date',
-                               'release_date_precision', 'total_tracks', 'type', 'uri'])
-        self.new_ablums = pd.DataFrame()
-        self.new_tracks = pd.DataFrame(columns = ['artists', 'available_markets', 'disc_number', 'duration_ms',
-                               'explicit', 'external_urls', 'href', 'id', 'is_local', 'name',
-                               'preview_url', 'track_number', 'type', 'uri'])
-        self.storm_track_ids = []
-        
-        
-        # Metadata for post-run reports
-        self.mdf = pd.read_csv(self.md_name).set_index('run_date')
-        self.rd = dt.datetime.now().strftime("%Y/%m/%d")
-        self.mdf.loc[self.rd, 'start_date'] = self.start_date
-        
-            
+        print("Storm User Client successfully connected to Spotify.")
+
     # Authentication Functions
     def authenticate(self):
         """
         Connect to Spotify API, intialize spotipy object and generate access token.
         """
-        print("Generating Token and Authenticating. . .")
         self.token = util.prompt_for_user_token(self.user_id,
                                                 scope=self.scope,
                                                 client_id=self.client_id,
@@ -137,426 +42,217 @@ class Storm:
                                                 redirect_uri='http://localhost/')
         self.sp = spotipy.Spotify(auth=self.token)
         self.token_start = dt.datetime.now()
-        print("Authentication Complete.")
-        print()
-    
-    def check_token(self):
-        """
-        Determine if token is still valid. This is called in many methods to avoid timeout
-        """
-        
-        if abs((self.token_start - dt.datetime.now()).total_seconds()) < 3580:
-            return True
-        else:
-            print("Awaiting Expiration and Refreshing.")
-            time.sleep(25)
-            self.authenticate()
 
-    def gen_dates(self):
+    def write_playlist_tracks(self, playlist_id, tracks):
         """
-        Generates a window-date to filter album release dates based on start-date
+        Writes a list of track ids into a user's playlist
         """
-        
-        # Start Dates
-        if self.start_date == None:
-            self.start_date = (dt.datetime.now() - dt.timedelta(days=1)).strftime("%Y-%m-%d")
-            
-        # Playlist Cycling dates
-        self.window_date = (dt.datetime.now() - dt.timedelta(days=14)).strftime("%Y-%m-%d")
-     
-    
-    # Ochestration Function
-    def Run(self):
-        """
-        The function that a user must run to generate their playlist of new releases.
-        Call this function after building a storm object
-        
-        Example Usage:
-        storm = Storm(params)
-        storm.Run() # Use parameters to generate releases
-        """
-        # Read-in existing data from past runs
-        self.read_in()
-        
-        # Augment artist list before track collection
-        self.augment_artist_list()
-        self.clean_artists()
-        self.save_artists()
-        
-        # Get Album lists
-        self.get_artist_albums()
-        self.filter_albums()
 
-        # Tracks
-        self.get_album_tracks()
-        self.clean_tracks()
+        # Call info
+        id_lim = 50
+        batches = np.array_split(tracks, int(np.ceil(len(tracks)/id_lim)))
 
-        # if track list to large apply date filter
-        if len(self.storm_track_ids)>9999:
-            self.filter_unseen = True
-            self.filter_albums()
-            self.get_album_tracks()
-            self.clean_tracks()
-        
-        # Playlist Writing
-        self.archive_current()
-        self.add_tracks_to_playlist(self.output, self.storm_track_ids)
-        
-        # Metadata save
-        self.save_md()
-        self.save_albums()
-        
-    
-    # I/O
-    # methods in this section are straightforward and mostly used for metadata
-    # tracking and simplifying the number of API calls using information fr0m
-    # past runs
-    def read_in(self):
-        """
-        Storm init function to gather 
-        """
-        print("Reading in existing Data.")
-        
-        if path.exists(self.artist_id_csv):
-            print("Storm Arists Found! Reading in now.")
-            self.artist_ids = pd.read_csv(self.artist_id_csv)['artists'].values.tolist()
-            self.mdf.loc[self.rd, 'artists_tracked'] = len(self.artist_ids)
-            print(f"Done! {len(self.artist_ids)} Unique Artists found.")
-            
-        else:
-            self.mdf.loc[self.rd, 'artists_tracked'] = 0
-        print()
-            
-        if path.exists('storm_blacklist_'+self.name+'.csv'):
-            print("Blacklisted Arists Found! Reading in now.")
-            self.blacklist = pd.read_csv('storm_blacklist_'+self.name+'.csv')['artists'].tolist()
-            self.mdf.loc[self.rd, 'blacklisted_artists'] = len(self.blacklist)
-            print(f"Done! {len(self.blacklist)} Blacklisted Artists found.")
-        print()
-            
-        if path.exists(self.album_id_csv):
-            print("Previously Discovered Albums Found! Reading in now.")
-            self.album_ids = pd.read_csv(self.album_id_csv)['albums'].values.tolist()
-            self.mdf.loc[self.rd, 'albums_tracked'] = len(self.album_ids)
-            print(f"Done! {len(self.album_ids)} Albums found.") 
-            
-        else:
-            self.mdf.loc[self.rd, 'albums_tracked'] = 0
-        print()
-    
-    def save_artists(self):
-        
-        print("Saving Artist Ids.")
-        pd.DataFrame(self.artist_ids, columns=['artists']).to_csv(self.artist_id_csv, index=False)
-    
-    def save_albums(self):
-        print("Saving Albums from run.")
-        self.album_ids = self.albums.id.tolist()
-        pd.DataFrame(self.album_ids, columns=['albums']).to_csv(self.album_id_csv, index=False)
-    
-    def save_md(self):
-        
-        print("Writing metadata from run.")
-        self.mdf.to_csv(self.md_name)
-    
-    # Storm Aggregate Functions
-    # These methods do the bulk of the API interfacing
-    # Most functions take in the previous step and work with the API
-    # to obtain all the data needed to progress the Run method forward
-    def augment_artist_list(self):
-        """
-        Use playlist inputs to get a list of artists to track releases from
-        output:
-            Arists from playlists added to artist_ids
-        """
-        # Comb through playlists and get the artist ids
-        print("Augmenting new Artists from playlist input dictionary.")
-        for pl in self.inputs.keys():
-            print("Obtaining a list of Tracks from Playlist . . ." + pl)
-            playlist_df = self.get_playlist_tracks(self.inputs[pl])
+        # First batch overwrite
+        self.authenticate()
+        self.sp.user_playlist_replace_tracks(self.user_id, playlist_id, batches[0])
 
-            print("Finding Artists . . .")
-            self.extend_artists(playlist_df['track'])
-        
-        print("Done! All Input Playlists Scanned.")
+        for batch in tqdm(batches[1:]):
+            self.sp.user_playlist_add_tracks(self.user_id, playlist_id, batch)
+
+        return True
+
+class StormClient:
+
+    def __init__(self, user_id):
+        """
+        Simple client, no user needed
+        """
+
+        self.user_id = user_id # User scope, no authorization needed, though
+        self.client_id = os.getenv('storm_client_id') # API app id
+        self.client_secret = os.getenv('storm_client_secret') # API app secret
+
+        # Spotify API connection
+        self.sp_cc = oauth2.SpotifyClientCredentials(self.client_id, self.client_secret)
+        self.token = None
+
+        # Authenticate
+        self.refresh_connection()
+
+        # Good
+        print("Storm Client successfully connected to Spotify.")
+
+
+    # Authentication
+    def refresh_connection(self):
+        """
+        Get a cached token (again) or try to get a new one. 
+        Call this before any api call to make sure it won't get credential error.
+        """
+        self.token = self.sp_cc.get_access_token(as_dict=False)
+        self.sp = spotipy.Spotify(auth=self.token)
+
+    def get_playlist_info(self, playlist_id):
+        """ Returns subset of playlist metadata """
+
+        # params
+        fields = 'description,id,name,owner,snapshot_id'
+
+        # Get the info
+        self.refresh_connection()
+        return self.sp.playlist(playlist_id, fields=fields)
 
     def get_playlist_tracks(self, playlist_id):
         """
-        Obtain all tracks from a playlist id
-        input:
-            playlist_id - input playlist that tracks will be collected for
-        output:
-            All tracks from playlist saved
+        Return subset of information about a playlists tracks (unique)
         """
+
+        # Call info
+        lim = 100
+        offset = 0
+        fields = 'items(track(id))' # only getting the ids, get info about them later
+        
+        # Get number of tracks trying to get (faster to know then go in blind)
+        self.refresh_connection()
+        total = int(self.sp.user_playlist_tracks(self.user_id, playlist_id, fields='total')['total'])
+        print(f"Total Tracks: {total}")
+        
+        # loop through and append track ids
+        result = ['' for x in range(total)] # List of track ids pre-initialized
+        for i in tqdm(range(int(np.ceil(total/lim)))):
+            self.refresh_connection()
+            response = self.sp.user_playlist_tracks(self.user_id, playlist_id, fields=fields, limit=lim, offset=(i*lim))
+
+            result[i*lim:(i*lim)+len(response['items'])] = [x['track']['id'] for x in response['items']]
+
+        return np.unique(result).tolist()
+
+    def get_artists_from_tracks(self, tracks):
+        """
+        Returns list of artist_ids given track_ids
+        """
+
+        # Call Info
+        id_lim = 50
+        batches = np.array_split(tracks, int(np.ceil(len(tracks)/id_lim)))
+
+        # Get Artists
+        artists = []
+        for batch in tqdm(batches):
+            self.refresh_connection()
+            response = self.sp.tracks(batch, market='US')['tracks']
+            [artists.extend(x['artists']) for x in response]
+
+        # Filter to just ids
+        return np.unique([x['id'] for x in artists]).tolist()
+
+    def get_artist_info(self, artists):
+        """
+        Gets a subset of artist info from a list of ids
+        """
+
+        # Call info
+        id_lim = 50
+        keys = ['followers', 'genres', 'id', 'name', 'popularity']
+        batches = np.array_split(artists, int(np.ceil(len(artists)/id_lim)))
+
+        # Get All artist info
+        result = []
+        for batch in tqdm(batches):
+            self.refresh_connection()
+            response = self.sp.artists(batch)['artists']
+            result.extend(response)
+
+        # Filter to just relevant fields
+        for i in range(len(result)):
+            result[i] = {k: result[i][k] for k in keys}
+
+        return result
+
+    def get_artist_albums(self, artists):
+        """
+        Returns subset of album fields
+        """
+
+        # Call info
         lim = 50
-        more_tracks = True
-        offset=0
+        offset = 0
+        album_types = 'single,album'
+        country='US'
+        keys = ['album_type', 'album_group', 'id', 'name', 'release_date', "artists", 'total_tracks']
 
-        self.check_token()
-        playlist_results = self.sp.user_playlist_tracks(self.user_id, playlist_id, limit=lim, offset=offset)
-        
-        if len(playlist_results['items']) < lim:
-                more_tracks = False
+        # Get All artist info
+        result = []
+        for artist in tqdm(artists):
 
-        while more_tracks:
+            # Initialize array for speed
+            self.refresh_connection()
+            total = int(self.sp.artist_albums(artist, country=country, album_type=album_types, limit=1)['total'])
 
-            self.check_token()
-            offset += lim
-            batch = self.sp.user_playlist_tracks(self.user_id, playlist_id, limit=lim, offset=offset)
-            playlist_results['items'].extend(batch['items'])
+            artist_result = ['' for x in range(total)] # List of album ids pre-initialized
+            for i in range(int(np.ceil(total/lim))):
+                self.refresh_connection()
+                response = self.sp.artist_albums(artist, country=country, album_type=album_types, limit=lim, offset=(i*lim))
+                artist_result[i*lim:(i*lim)+len(response['items'])] = [{k: x[k] for k in keys} for x in response['items']]
 
-            if len(batch['items']) < lim:
-                more_tracks = False
+            result.extend(artist_result)
 
-        response_df = pd.DataFrame(playlist_results['items'])
-        return response_df
-    
-    def extend_artists(self, track_df):
-        """
-        Take a list of artists, get information and decide whether to include
-        input:
-            Dataframe of Tracks
-        output:
-            Cleaned set of artist ids to augment
-        """
-        for track in track_df:
-            try:
-                artists = dict(track)['artists']
-            except:
-                continue
+        # Remove all other info about artists except ids
+        for i in range(len(result)):
+            result[i]['artists'] = [x['id'] for x in result[i]['artists']]
 
-            for artist in artists:
-                if artist['id'] not in self.artist_ids:
-                    self.check_token()
-                    artist_info = self.sp.artist(artist['id'])
-                    if 'classical' not in artist_info['genres']:
-                        self.artist_ids.append(artist['id'])
-    
-    def clean_artists(self):
-        """
-        Remove any artists saved in the Storm's blacklist metadata file
-        """
-        print("Removing Blacklist Artists.")
-        self.filter_blacklist()
-    
-    def clean_tracks(self):
-        """
-        Perform clean-up on list of newly released tracks
-        """
-        self.storm_track_ids = np.unique(self.storm_track_ids)
-        self.new_tracks = self.new_tracks.drop_duplicates('id').reset_index(drop=True)
-        newids = []
-        
-        print("Checking Tracks for bad features.")
-        print("Starting track amount: "+str(len(self.new_tracks)))
-        for index in tqdm(self.new_tracks.index):
-            
-            artists = self.new_tracks.loc[index, 'artists']
-            check=True
-            
-            # Check artists
-            for artist in artists:
-                if artist['id'] in self.blacklist:
-                     check = False
-            
-            # If still a valid track, check a few features
-            if check:
-                
-                # Get track features
-                af = self.sp.audio_features(self.new_tracks.loc[index, 'id'])[0]
-                
-                try:
-                    if af['instrumentalness'] < .7:
-                        check = False
-                    elif af['speechiness'] > .32:
-                        check = False
-                    elif af['duration_ms'] < 60001:
-                        check = False
-                except:
-                    continue
-            
-            # Remove if certain features don't clear
-            if not self.instrumental:
-                check = True
+        return result
 
-            if check:
-                 newids.append(self.new_tracks.loc[index, 'id'])
-        print("Ending Track Amount: " + str(len(newids)))
-        self.storm_track_ids = newids
-        self.mdf.loc[self.rd, 'tracks_added'] = len(self.storm_track_ids)
-        self.mdf.loc[self.rd, 'tracks_removed'] = self.mdf.loc[self.rd, 'tracks_eligible'] - self.mdf.loc[self.rd, 'tracks_added']
-    
-    def filter_classical(self):
+    def get_album_tracks(self, albums):
         """
-        Classical music filters on artist
+        Returns an albums info and tracks.
         """
-        output_list = []
-        for artist in tqdm(self.artist_ids):
-            self.check_token()
-            artist_info = self.sp.artist(artist)
-
-            if 'classical' not in artist_info['genres']:
-                output_list.append(artist)
-
-        self.artist_ids = output_list
-        
-    def filter_blacklist(self):
-        """
-        Blacklist metadata file filter
-        """
-        output_list = []
-        for artist in tqdm(self.artist_ids):
-            if artist not in self.blacklist:
-                output_list.append(artist)
-
-        self.artist_ids = output_list
-        self.mdf.loc[self.rd, 'artists_augmented'] = len(self.artist_ids)-self.mdf.loc[self.rd, 'artists_tracked']
-    
-    def get_artist_albums(self):
-        """
-        Get a list of all albums an artist has released
-        """        
-        
-        print("Obtaining all albums from the list of artists. (Albums)")
+        # Call info
         lim = 50
-        for artist_id in tqdm(self.artist_ids):
-            
-            self.check_token()
-            response = self.sp.artist_albums(artist_id, limit=lim, album_type='album', country='US')
-            offset = 0
-            more_albums = True
+        country = 'US'
+        keys = ['artists', 'duration_ms', 'id', 'name', 'explicit', 'track_number']
 
-            while more_albums:
-                
-                self.check_token()
-                batch = self.sp.artist_albums(artist_id, limit=lim, offset=offset, album_type='album', country='US')
-                response['items'].extend(batch['items'])
-                offset += lim
+        # Get All album tracks info
+        result = []
+        for album in tqdm(albums):
 
-                if len(batch['items']) < lim:
-                        more_albums = False
+            # Initialize array for speed
+            self.refresh_connection()
+            total = int(self.sp.album_tracks(album, market=country, limit=1)['total'])
 
-            response_df = pd.DataFrame(response['items'])
-            self.albums = pd.concat([self.albums, response_df], axis=0)
-           
-        print(f"Albums being tracked: {len(self.albums)}")
-        print("Obtaining all albums from the list of artists. (Singles)")
-        for artist_id in tqdm(self.artist_ids):
-            
-            self.check_token()
-            response = self.sp.artist_albums(artist_id, limit=lim, album_type='single', country='US')
-            offset = 0
-            more_albums = True
+            album_result = ['' for x in range(total)] # List of album ids pre-initialized
+            for i in range(int(np.ceil(total/lim))):
+                self.refresh_connection()
+                response = self.sp.album_tracks(album, market=country, limit=lim, offset=(i*lim))               
+                album_result[i*lim:(i*lim)+len(response['items'])] = [{k: x[k] for k in keys} for x in response['items']]
 
-            while more_albums:
-                
-                self.check_token()
-                batch = self.sp.artist_albums(artist_id, limit=lim, offset=offset, album_type='single', country='US')
-                response['items'].extend(batch['items'])
-                offset += lim
+            # Add the album_id back in
+            [x.update({'album_id':album}) for x in album_result]
+            result.extend(album_result)
 
-                if len(batch['items']) < lim:
-                        more_albums = False
+        # Remove all other info about artists except ids
+        for i in range(len(result)):
+            result[i]['artists'] = [x['id'] for x in result[i]['artists']]
 
-            response_df = pd.DataFrame(response['items'])
-            response_df = response_df
-            self.albums = pd.concat([self.albums, response_df], axis=0)
-            
-        print(f"Albums being tracked: {len(self.albums)}")
-   
-    def filter_albums(self):
+        return result
+
+    def get_track_features(self, tracks):
         """
-        If filter_unseen is True, only releases in the window are tracked. Otherwise
-        any new piece will be added.
+        Returns a tracks info and audio features
         """
-        # Or Condition, either its new or hasn't been viewed
-        print("Filtering Album list for new content.")
-        if self.filter_unseen:
-            self.new_albums = self.albums[self.albums.release_date >= self.start_date]
-        else:
-            self.new_albums = self.albums[(~self.albums.id.isin(self.album_ids)) | (self.albums.release_date >= self.start_date)]
+        # Call info
+        id_lim = 50
+        keys = ["id", "danceability", "energy", "key", "loudness", "mode", "speechiness", "acousticness",
+        "instrumentalness", "liveness", "valence", "tempo", "time_signature"]
+        batches = np.array_split(tracks, int(np.ceil(len(tracks)/id_lim)))
 
-        self.mdf.loc[self.rd, 'albums_augmented'] = len(self.new_albums)
-          
-    def get_album_tracks(self):
-        """
-        Get all tracks off an album.
-        """
-        lim = 50
-        print("Using Filtered albums to obtain a track list.")
-        for album_id in tqdm(self.new_albums.id):
-            self.check_token()
-            response = self.sp.album_tracks(album_id, limit=lim)
-            offset = 0
-            more_tracks = True
-            if len(response['items']) < lim:
-                    more_tracks = False
+        # Get track features in batches
+        result = []
+        for batch in tqdm(batches):
+            self.refresh_connection()
+            response = self.sp.audio_features(batch)
+            result.extend([{k: x[k] for k in keys} for x in response if x is not None])
 
-            while more_tracks:
-                
-                self.check_token()
-                batch = self.sp.album_tracks(album_id, limit=lim, offset=offset)
-                response['items'].extend(batch['items'])
-                offset += lim
+        # Filter to just ids
+        return result
 
-                if len(batch['items']) < lim:
-                    more_tracks = False
-
-            response_df = pd.DataFrame(response['items'])
-            self.new_tracks = pd.concat([self.new_tracks, response_df], axis=0)
-        self.mdf.loc[self.rd, 'tracks_eligible'] = len(self.new_tracks)
-    
-    def archive_current(self):
-        """
-        Stash files still in output playlist to new playlist
-        """
-        # Read-in current tracks
-        print("Archiving Current Storm Listening.")
-        current_listening = self.get_playlist_tracks(self.output)
-        current_archive = self.get_playlist_tracks(self.archive)
-        
-        try:
-            track_ids_cur = [dict(track)['id'] for track in current_listening.track]
-            track_ids_arc = [dict(track)['id'] for track in current_archive.track]
-            track_ids_writing = []
-
-            for track in track_ids_cur:
-                if track not in track_ids_arc:
-                    track_ids_writing.append(track)
-
-            # Write them to the archive playlist
-            if len(track_ids_writing) == 0:
-                print("No Unique tracks to Archive.")
-            else:
-                self.add_tracks_to_playlist(self.archive, track_ids_writing, replace=False)
-        except:
-            print("No Tracks to Archive.")
-    
-    def add_tracks_to_playlist(self, playlist_id, track_ids, replace=True):
-        """
-        Write new releases to output playlist.
-        """
-        print("Preparing Tracks for Writing")
-        lim = 50
-        if len(self.storm_track_ids) > lim:
-            split_tracks = np.array_split(track_ids, np.ceil(len(track_ids)/lim))
-
-            print("Writing Tracks")
-            if replace:
-                self.check_token()
-                self.sp.user_playlist_replace_tracks(self.user_id, playlist_id, split_tracks[0])
-                for track_list in tqdm(split_tracks[1:]):
-                    self.check_token()
-                    self.sp.user_playlist_add_tracks(self.user_id, playlist_id, track_list)
-            else:
-                for track_list in tqdm(split_tracks):
-                    self.check_token()
-                    self.sp.user_playlist_add_tracks(self.user_id, playlist_id, track_list)
-        else:
-            print("Writing Tracks")
-            if replace:
-                self.check_token()
-                self.sp.user_playlist_replace_tracks(self.user_id, playlist_id, self.storm_track_ids)
-            else:
-                self.check_token()
-                self.sp.user_playlist_add_tracks(self.user_id, playlist_id, self.storm_track_ids)
