@@ -448,7 +448,11 @@ class StormDB:
 
 class StormAnalyticsDB:
     """
-    Wrapper for the MySQL analytics database
+    Wrapper for the MySQL analytics database. Unlike StormDB, 
+    this is a basic anlaytics database and thus does not require
+    much schema abstraction code, as most decisions are built into
+    the view generator themselves. This just manages the IO of those
+    views so that connection to the database is managed in a single object.
     """
 
     def __init__(self):
@@ -459,4 +463,20 @@ class StormAnalyticsDB:
                                 database=os.getenv("mysql_db"),
                                 port=int(os.getenv("mysql_port")))
 
-        
+    def read_table(self, table, q=None):
+        """
+        Reads a table from the SADB by name or query
+        """
+
+        if q is None:
+            df = pd.read_sql_table(table, self.cxn)
+        else:
+            df = pd.read_sql_query(q, self.cxn)
+
+    def write_table(self, df, table, method='overwrite'):
+        """
+        writes a pandas dataframe into the DB.
+        """
+
+        if method == "overwrite":
+            df.to_sql(table, self.cxn, if_exists='replace')
