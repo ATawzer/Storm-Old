@@ -19,56 +19,7 @@ class StormAnalyticsGenerator:
     def __init__(self):
         self.sdb = StormDB()
 
-class StormAnalyticsWriter:
-    """
-    Writes views into the MySQL endpoint
-    Only connected to the analytics database
-    """
-    def __init__(self):
-        self.sadb = StormAnalyticsDB()
-
-class StormAnalyticsController:
-    """
-    Wraps around a StormDB (Mongo backend) and a StormAnalyticsDB (MySQL analytics DB) to generate 
-    and write out different analytical views.
-    Connected to a generator, writer and database. Main orchestration tool
-    """
-
-    def __init__(self, verbose=True):
-
-        self.sdb = StormDB()
-        self.sadb = StormAnalyticsDB()
-        self.sag = StormAnalyticsGenerator()
-        self.saw = StormAnalyticsWriter()
-
-        self.view_gen_map = {'playlist_track_changes':self.gen_v_playlist_track_changes,
-                         'many_playlist_track_changes':self.gen_v_many_playlist_track_changes}
-        self.view_write_map = {}
-        self.print = print if verbose else lambda x: None
-
-    # Generic generate and write views
-    def gen_view(self, name, view_params={}):
-        """
-        Caller function for views (prints and other nice additions)
-        """
-        if name in self.map.keys():
-            self.print(f"Generating View: {name}")
-            self.print(f"Supplied Parameters: {view_params}")
-
-            start = timer()
-            r = self.map[name](**view_params)
-            end = timer()
-
-            self.print("View Complete!")
-            self.print(f"Elapsed Time to Build: {round(end-start, 4)} ms. | File Size: {getsizeof(r)} bytes")
-
-            return r
-
-        else:
-            raise Exception(f"View {name} not in map.")
-
-    def save_view(self, result)
-
+    # Playlist Views
     def gen_v_many_playlist_track_changes(self, playlist_ids=[], index=False):
         """
         Cross-Compares many playlist track changes
@@ -121,3 +72,55 @@ class StormAnalyticsController:
         df.index.rename('date_collected', inplace=True)
 
         return df if index else df.reset_index()
+
+class StormAnalyticsWriter:
+    """
+    Writes views into the MySQL endpoint
+    Only connected to the analytics database
+    """
+    def __init__(self):
+        self.sadb = StormAnalyticsDB()
+
+class StormAnalyticsController:
+    """
+    Wraps around a StormDB (Mongo backend) and a StormAnalyticsDB (MySQL analytics DB) to generate 
+    and write out different analytical views.
+    Connected to a generator, writer and database. Main orchestration tool
+    """
+
+    def __init__(self, verbose=True):
+
+        self.sdb = StormDB()
+        self.sadb = StormAnalyticsDB()
+        self.sag = StormAnalyticsGenerator()
+        self.saw = StormAnalyticsWriter()
+
+        self.view_gen_map = {'playlist_track_changes':self.gen_v_playlist_track_changes,
+                         'many_playlist_track_changes':self.gen_v_many_playlist_track_changes}
+        self.view_write_map = {}
+        self.print = print if verbose else lambda x: None
+
+    # Generic generate and write views
+    def gen_view(self, name, view_params={}):
+        """
+        Caller function for views (prints and other nice additions)
+        """
+        if name in self.map.keys():
+            self.print(f"Generating View: {name}")
+            self.print(f"Supplied Parameters: {view_params}")
+
+            start = timer()
+            r = self.map[name](**view_params)
+            end = timer()
+
+            self.print("View Complete!")
+            self.print(f"Elapsed Time to Build: {round(end-start, 4)} ms. | File Size: {getsizeof(r)} bytes")
+
+            return r
+
+        else:
+            raise Exception(f"View {name} not in map.")
+
+    def save_view(self, result)
+
+    

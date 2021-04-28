@@ -5,6 +5,7 @@ from pymongo import MongoClient
 import pandas as pd
 import numpy as np
 from timeit import default_timer as timer
+from mysql.connector import connect as mysql_connect
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -452,4 +453,10 @@ class StormAnalyticsDB:
 
     def __init__(self):
 
-        self.sql_db = None
+        self.cxn = mysql_connect(user=os.getenv("mysql_user"),
+                                password=os.getenv("mysql_pass"),
+                                host=os.getenv("mysql_server"),
+                                database=os.getenv("mysql_db"),
+                                port=int(os.getenv("mysql_port")))
+
+        
