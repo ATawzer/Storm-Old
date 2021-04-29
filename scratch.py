@@ -17,12 +17,14 @@ sdb = StormDB()
 sdb.get_runs_by_storm('film_vg_instrumental')
 
 sac = StormAnalyticsController()
+sac.analytics_pipeline()
 
 pipeline = {}
-pipeline['view_generation_pipeline'] = [('playlist_info', {"playlist_ids":[]})]
+pipeline['view_generation_pipeline'] = [('playlist_info', {"playlist_ids":[]}),
+                                                    ('run_history', {"storm_names":[]})]
 sac.analytics_pipeline(pipeline)
 
-sag = StormAnalyticsGenerator()
-params = {'playlist_ids':[], 'index':True}
-name = 'many_playlist_track_changes'
-test = sadb.gen_view(name, params)
+sac = StormAnalyticsController()
+params = {'storm_names':[]}
+name = 'run_history'
+test = sac.gen_view(name, params)

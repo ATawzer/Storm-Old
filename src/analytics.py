@@ -154,6 +154,7 @@ class StormAnalyticsGenerator:
             # df Computations
             run_df['storm_tracks_per_artist'] = run_df['storm_tracks_cnt'] / run_df['storm_artists_cnt']
             run_df['storm_tracks_per_day'] = run_df['storm_tracks_cnt'] / run_df['days']
+            run_df['storm_tracks_per_artist_day'] = run_df['storm_tracks_per_day'] / run_df['storm_artists_cnt']
 
             df = pd.concat([df, run_df])
 
@@ -204,13 +205,17 @@ class StormAnalyticsController:
             # SDB -> SADB
             pipeline['view_generation_pipeline'] = [('playlist_history', {"playlist_ids":[]}),
                                                     ('playlist_info', {"playlist_ids":[]}),
-                                                    ('run_history'), {"storm_names":[]}]
+                                                    ('run_history', {"storm_names":[]})]
 
         else:
             pipeline = custom_pipeline
 
+        start = timer()
         self.print("Executing Pipelines . . .\n")
         [self.write_view(task[0], self.gen_view(task[0], task[1])) for task in pipeline['view_generation_pipeline']]
+        end = timer()
+        self.print("Pipelines Complete!")
+        self.print(f"Elapsed Time: {round(end-start, 4)}s \n")
 
     # Generic generate and write views
     def gen_view(self, name, view_params={}):
