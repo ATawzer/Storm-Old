@@ -15,6 +15,9 @@ load_dotenv()
 class StormDB:
     """
     Manages the MongoDB connections, reading and writing.
+    Eventually would be an API service for accessing the Storm database which
+    is essentially storm metadata and a small subset of the spotify database
+    needed for storm operations and machine learning.
     """
     def __init__(self):
 
@@ -78,14 +81,14 @@ class StormDB:
         Will Return all run records for a storm (and all fields)
         """
         q = {"storm_name":storm_name}
-        cols = {"_id":0}
+        cols = {}
         r = list(self.runs.find(q, cols))
 
         if len(r) == 0:
             return None
         else:
             return r
-            
+
     # Metadata Write Endpoints
     def write_run_record(self, run_record):
 
