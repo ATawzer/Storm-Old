@@ -73,6 +73,19 @@ class StormDB:
             max_run_idx = np.argmax(np.array([dt.datetime.strptime(x['run_date'], '%Y-%m-%d') for x in r]))
             return r[max_run_idx]
 
+    def get_runs_by_storm(self, storm_name):
+        """
+        Will Return all run records for a storm (and all fields)
+        """
+        q = {"storm_name":storm_name}
+        cols = {"_id":0}
+        r = list(self.runs.find(q, cols))
+
+        if len(r) == 0:
+            return None
+        else:
+            return r
+            
     # Metadata Write Endpoints
     def write_run_record(self, run_record):
 
