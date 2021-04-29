@@ -1,7 +1,7 @@
 # This file is dedicated to maintaining a MySQL Database of rolled up analytical information 
 # from the MongoDB backend. These pipelines are porting over information into tabular formats,
 # unnesting documents as necessary. 
-
+#
 # The controller executes all the pipelines, which invoke more specific action classes
 # The pipelines are setup to execute so long as the mapping in the controllers are up to date
 # Updating logic within an action class will without any additional effort update the
@@ -15,11 +15,12 @@ import pandas as pd
 import numpy as np
 from timeit import default_timer as timer
 from tqdm import tqdm
+import datetime as dt
 
 from dotenv import load_dotenv
 load_dotenv()
 
-#from .db import *
+from .db import *
 
 class StormAnalyticsGenerator:
     """
@@ -115,7 +116,51 @@ class StormAnalyticsGenerator:
         df.index.rename("playlist_id", inplace=True)
         return df.reset_index()
 
-    def gen_v_
+    # Run Views
+    def gen_v_run_history(self, storm_names=[]):
+        """
+        Creates a flat table for one or many storm run records.
+        """
+
+        if len(storm_names) == 0:
+            self.print("No storm names supplied, running it for all.")
+            storm_names = self.sdb.get_all_configs() # To be replaced by get_all_config_names
+
+        df = pd.DataFrame()
+        self.print(f"Collecting runs for {len(storm_names)} Storms.")
+        for storm in storm_names:
+            self.print(f"{storm}")
+            runs = self.sdb.get_runs_by_storm(storm)
+
+            run_df = pd.DataFrame(index=[x['_id'] for x in runs])
+            for run in self.tqdm(runs):
+
+                # Copying
+                run_df.loc[run['_id'], 'run_date'] = run['run_date']
+                run_df.loc[run['_id'], 'start_date'] = run['start_date']
+
+                # Direct Aggregations
+                agg_keys = ['playlists', 'input_tracks', 'input_artists', 'eligible_tracks', 
+                            'storm_tracks', 'storm_artists', 'storm_albums', 'removed_artists', 'removed_tracks',
+                            'storm_sample_tracks']
+
+                for key in agg_keys:
+                    run_df.loc[run['_id'], f"{key}_cnt"] = len(run[key])
+
+                # Computations
+                run_df.loc[run["_id"], 'days'] = (dt.datetime.strptime(run['run_date'], "%Y-%m-%d") - 
+                                                  dt.datetime.strptime(run['start_date'], "%Y-%m-%d")).days
+
+            # df Computations
+            run_df['storm_tracks_per_artist'] = run_df['storm_tracks_cnt'] / run_df['storm_artists_cnt']
+            run_df['storm_tracks_per_day'] = run_df['storm_tracks_cnt'] / run_df['days']
+
+            df = pd.concat([df, run_df])
+
+        df.index.rename('run_id', inplace=True)
+        return df.reset_index()
+
+
 
 class StormAnalyticsController:
     """
@@ -126,10 +171,12 @@ class StormAnalyticsController:
 
     def __init__(self, verbocity=3):
 
+        # Connections
         self.sdb = StormDB()
         self.sadb = StormAnalyticsDB()
         self.sag = StormAnalyticsGenerator(verbocity=verbocity-1)
 
+        # All of the available views that could be written to SADB. Supply Params on invocation
         self.view_map = {'single_playlist_history':self.sag.gen_v_single_playlist_history,
                              'playlist_history':self.sag.gen_v_playlist_history,                                                 
                              'playlist_info':self.sag.gen_v_playlist_info,
@@ -156,7 +203,8 @@ class StormAnalyticsController:
 
             # SDB -> SADB
             pipeline['view_generation_pipeline'] = [('playlist_history', {"playlist_ids":[]}),
-                                                    ('playlist_info', {"playlist_ids":[]})]
+                                                    ('playlist_info', {"playlist_ids":[]}),
+                                                    ('run_history'), {"storm_names":[]}]
 
         else:
             pipeline = custom_pipeline

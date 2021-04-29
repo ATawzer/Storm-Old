@@ -81,7 +81,7 @@ class StormDB:
         Will Return all run records for a storm (and all fields)
         """
         q = {"storm_name":storm_name}
-        cols = {}
+        cols = {"config":0}
         r = list(self.runs.find(q, cols))
 
         if len(r) == 0:
