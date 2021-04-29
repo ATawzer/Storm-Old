@@ -14,6 +14,8 @@ python-dotenv = "*"
 tqdm = "*"
 pyodbc = "*"
 mysql-connector-python = "*"
+sqlalchemy = "*"
+pymysql = "*"
 
 [dev-packages]
 

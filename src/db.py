@@ -5,7 +5,9 @@ from pymongo import MongoClient
 import pandas as pd
 import numpy as np
 from timeit import default_timer as timer
-from mysql.connector import connect as mysql_connect
+import pymysql
+from sqlalchemy import create_engine
+
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -457,11 +459,14 @@ class StormAnalyticsDB:
 
     def __init__(self):
 
-        self.cxn = mysql_connect(user=os.getenv("mysql_user"),
+        cxn_string = "mysql+pymysql://{user}:{password}@{host}/{database}?host={host}?port={port}"
+        self.db_engine = create_engine(cxn_string.format(
+                                user=os.getenv("mysql_user"),
                                 password=os.getenv("mysql_pass"),
                                 host=os.getenv("mysql_server"),
                                 database=os.getenv("mysql_db"),
-                                port=int(os.getenv("mysql_port")))
+                                port=os.getenv("mysql_port")))
+        self.cxn = self.db_engine.connect()
 
     def read_table(self, table, q=None):
         """
@@ -473,10 +478,10 @@ class StormAnalyticsDB:
         else:
             df = pd.read_sql_query(q, self.cxn)
 
-    def write_table(self, df, table, method='overwrite'):
+    def write_table(self, table, df, method='overwrite'):
         """
         writes a pandas dataframe into the DB.
         """
 
         if method == "overwrite":
-            df.to_sql(table, self.cxn, if_exists='replace')
+            df.to_sql(table, self.cxn, if_exists='replace', index=False)

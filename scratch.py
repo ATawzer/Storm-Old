@@ -16,10 +16,11 @@ from src.db import *
 sdb = StormDB()
 sdb.get_playlists(name=True)
 
-sadb = StormAnalyticsDB()
-params = {'playlist_id':'0R1gw1JbcOFD0r8IzrbtYP', 'index':True}
-name = 'playlist_track_changes'
-test = sadb.gen_view(name, params)
+sac = StormAnalyticsController()
+
+pipeline = {}
+pipeline['view_generation_pipeline'] = [('playlist_info', {"playlist_ids":[]})]
+sac.analytics_pipeline(pipeline)
 
 
 params = {'playlist_ids':[], 'index':True}
