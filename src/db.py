@@ -3,8 +3,13 @@ from sys import getsizeof
 import json
 from pymongo import MongoClient
 import pandas as pd
+from tqdm import tqdm
 import numpy as np
+import datetime as dt
 from timeit import default_timer as timer
+import pymysql
+from sqlalchemy import create_engine
+
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -12,6 +17,9 @@ load_dotenv()
 class StormDB:
     """
     Manages the MongoDB connections, reading and writing.
+    Eventually would be an API service for accessing the Storm database which
+    is essentially storm metadata and a small subset of the spotify database
+    needed for storm operations and machine learning.
     """
     def __init__(self):
 
@@ -69,6 +77,19 @@ class StormDB:
         elif len(r) > 0:
             max_run_idx = np.argmax(np.array([dt.datetime.strptime(x['run_date'], '%Y-%m-%d') for x in r]))
             return r[max_run_idx]
+
+    def get_runs_by_storm(self, storm_name):
+        """
+        Will Return all run records for a storm (and all fields)
+        """
+        q = {"storm_name":storm_name}
+        cols = {"config":0}
+        r = list(self.runs.find(q, cols))
+
+        if len(r) == 0:
+            return None
+        else:
+            return r
 
     # Metadata Write Endpoints
     def write_run_record(self, run_record):
@@ -367,6 +388,36 @@ class StormDB:
             return [] # not good, for downstream bug fixing
             raise ValueError(f"Track {track} not found or doesn't have any artists.")
 
+    def get_tracks(self):
+        """
+        Returns a list of all tracks in the database.
+        """
+        q = {}
+        cols = {"_id":1}
+        r = list(self.tracks.find(q, cols))
+
+        return [x["_id"] for x in r]
+
+    def get_track_info(self, track_ids):
+        """
+        Returns all available information for every track in track_ids.
+        Done in batches as it is a large database.
+        """
+
+        # Check if needs to be done in batches
+        id_lim = 50000
+        batches = np.array_split(track_ids, int(np.ceil(len(track_ids)/id_lim)))
+        result = []
+        for batch in tqdm(batches):
+
+            q = {"_id":{"$in":batch.tolist()}}
+            cols = {"artists":0, "audio_analysis":0}
+            r = list(self.tracks.find(q, cols))
+            result.extend(r)
+
+        return result
+
+
     # Track Write Endpoints
     def update_tracks(self, track_info_list):
         """
@@ -447,9 +498,38 @@ class StormDB:
 
 class StormAnalyticsDB:
     """
-    Wrapper for the MySQL analytics database
+    Wrapper for the MySQL analytics database. Unlike StormDB, 
+    this is a basic anlaytics database and thus does not require
+    much schema abstraction code, as most decisions are built into
+    the view generator themselves. This just manages the IO of those
+    views so that connection to the database is managed in a single object.
     """
 
     def __init__(self):
 
-        self.sql_db = None
+        cxn_string = "mysql+pymysql://{user}:{password}@{host}/{database}?host={host}?port={port}"
+        self.db_engine = create_engine(cxn_string.format(
+                                user=os.getenv("mysql_user"),
+                                password=os.getenv("mysql_pass"),
+                                host=os.getenv("mysql_server"),
+                                database=os.getenv("mysql_db"),
+                                port=os.getenv("mysql_port")))
+        self.cxn = self.db_engine.connect()
+
+    def read_table(self, table, q=None):
+        """
+        Reads a table from the SADB by name or query
+        """
+
+        if q is None:
+            df = pd.read_sql_table(table, self.cxn)
+        else:
+            df = pd.read_sql_query(q, self.cxn)
+
+    def write_table(self, table, df, method='overwrite'):
+        """
+        writes a pandas dataframe into the DB.
+        """
+
+        if method == "overwrite":
+            df.to_sql(table, self.cxn, if_exists='replace', index=False)

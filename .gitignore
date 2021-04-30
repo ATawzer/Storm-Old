@@ -4,7 +4,7 @@ storm/Storm/Storm.mdproj
 storm/config/config_secret.json
 
 *.env
-*.cache
+.cache
 
 .idea
 .vscode

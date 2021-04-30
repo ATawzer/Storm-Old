@@ -8,20 +8,29 @@ import os
 import datetime as dt
 import time
 import json
+from dotenv import load_dotenv
+load_dotenv()
 
 # Internal
 from src.db import *
+from src.storm import Storm
+
+Storm(['contemporary_lyrical']).Run()
+
 
 
 sdb = StormDB()
-sdb.get_playlists(name=True)
+sdb.get_runs_by_storm('film_vg_instrumental')
 
-sadb = StormAnalyticsDB()
-params = {'playlist_id':'0R1gw1JbcOFD0r8IzrbtYP', 'index':True}
-name = 'playlist_track_changes'
-test = sadb.gen_view(name, params)
+sac = StormAnalyticsController()
+sac.analytics_pipeline()
 
+pipeline = {}
+pipeline['view_generation_pipeline'] = [('playlist_info', {"playlist_ids":[]}),
+                                                    ('run_history', {"storm_names":[]})]
+sac.analytics_pipeline(pipeline)
 
-params = {'playlist_ids':[], 'index':True}
-name = 'many_playlist_track_changes'
-test = sadb.gen_view(name, params)
+sac = StormAnalyticsController()
+params = {'storm_names':[]}
+name = 'run_history'
+test = sac.gen_view(name, params)

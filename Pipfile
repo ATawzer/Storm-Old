@@ -12,6 +12,11 @@ pymongo = "*"
 pyssl = "*"
 python-dotenv = "*"
 tqdm = "*"
+pyodbc = "*"
+mysql-connector-python = "*"
+sqlalchemy = "*"
+pymysql = "*"
+cryptography = "*"
 
 [dev-packages]
 
