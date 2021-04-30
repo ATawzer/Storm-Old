@@ -41,4 +41,4 @@ class Storm:
         for storm_name in self.storm_names:
             StormRunner(storm_name).Run()
 
-Storm(['film_vg_instrumental', 'contemporary_lyrical']).Run()
+#Storm(['film_vg_instrumental', 'contemporary_lyrical']).Run()

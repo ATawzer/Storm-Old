@@ -39,7 +39,7 @@ class StormUserClient:
                                                 scope=self.scope,
                                                 client_id=self.client_id,
                                                 client_secret=self.client_secret,
-                                                redirect_uri='http://localhost/')
+                                                redirect_uri='http://localhost:8080/')
         self.sp = spotipy.Spotify(auth=self.token)
         self.token_start = dt.datetime.now()
 
