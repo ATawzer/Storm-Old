@@ -31,67 +31,36 @@ These are mostly effective ways of finding new music. However, particularly in n
 
 # Setup and Usage
 
-To get started, you will need a few pieces of information. The .ipynb notebook titled Storm Notebook has a cell dedicated to setting this information up. 
+To get started, you will need:
 
-## 1. User Id 
-The first and arguably most important is your user id, which can be found by navigating to your profile and clicking the three dots icon. Then, navigate to Share -> Copy Spotify URI and you should be presented with something like the following:
+- Spotify User ID
+- Spotify Web API accesss (client and secret id)
+- MongoDB database the storm can write to and from (local is fine)
+- MySQL database for analytics and ML (local is fine)
+- A specific Spotify playlist structure (for now, until it gets automated with a configurator or frontend)
 
-spotify:user:1241528689
+Most of this information lives inside your own .env file that will be loaded when using. See class definitions for the exact information you will need.
 
-The code in the last piece (usually a number) is your user id. Paste this number as the user_id variable
-
-** Special Note **
-On the first run, Spotify will need to authenticate and ask for your permission to let The Storm access your data. See storm.utils.py for the exact web API scope names. Storm only needs permission to read and write playlists on your account. The user ids are only stored in your local copy of the notebook and all authentication / security is handled by Spotify, not this application.
-
-## 2. Output and Archive Playlists
-Next, you must either pick a playlist or create one dedicated to saving the results of the Storm run. I, for instance, use a playlist simply titled The Storm, which is where I save all the music foud for me. The archive playlist is where songs you haven’t listened to will be stored if another storm run is performed. I have labeled this The Storm Archive in my own playlist library. Add the output and archive playlist ids into the dictionary under ‘daily’ and ‘archive’ keys respectively.
-
-Obtaining the playlist id is similar to the above step. On an existing or freshly created playlist right-click the playlist -> Share -> Copy Spotify URI. Grab the numeric code at the end as the playlist id
-
-## 3. Input playlists
-This is where your preferences are inputted. Find a playlist or create one that has the music from the artists you absolutely love. Add this into the dictionary as ‘name’:’id’. Storm will use this playlist to obtain an artist list to get tracks for. Additionally, if there are curated playlists you are interested in following, add them in! There is no limit to the number of playlists storm can track. Though, for run-time purposes, it is usually best to start with a succinct playlist featuring only the best of the artists you follow.
-
-## 4. Ongoing usage
-It is up to you on how best to go through all the tracks. I typically use a move-or-delete workflow. I have a playlist where I store all of the tracks from the storm I am interested in. As I listen to the storm, if I like a track I move it and if I don’t I delete it. Don’t worry, the storm knows which track it was, so you’ll know you can find it again. Otherwise, the tracks you liked are stored and the ones you didn’t are gone. 
-
-If certain artists post to much noise, add their URI into the blacklist.csv file and they will no longer bother you. Some artists represent aggregates of artists and have to be blacklisted to prevent overwhelming you. 
-
-To start a new storm or refresh your artist list simply change the name of the storm and it will be like starting anew.
-
-** Special Note **
-Make sure you change the name of the storm the first time around. Do this anytime you want to change the artists you are tracking. Metadata and API acceleration is stored to this name and embedded into the .csv’s that store your run data.
-
-## 5. Monitor Usage
-As a user of the storm I wanted to share some sample visuals to track how useful the storm has been to me. Over the course of its creation I have tried out 60,000+ tracks across 1,400+ artists all orchestrated using the storm. 
-
-![Plot1](https://github.com/ATawzer/Storm/blob/master/images/plot1.PNG)
-
-![Plot2](https://github.com/ATawzer/Storm/blob/master/images/plot2.PNG)
-
-I almost always know and listen to songs before any of my friends or family, even the true fans of certain artists. I also know I won’t ever miss the best music out there from my favorite artists.
+The storm is still evolving and requires a lot to get off the ground. Hopefully by version 4 or 5 this will not be the case. Please contact me if you are interested in using it in its current form.
 
 # Requirements
 
-See requirements.txt
+Storm uses pipenv. Simply run pipenv install inside this repo and all dependencies should be installed.
 
 # Final Thoughts
 
 ## 1. Future Improvement
-- Better ranking of delivered music
-- Better de-duping of same tracks released in different languages
-- More use of audio features to remove bad or spammy artists from having to manually blacklisted
-- Interface for orchestrating the storm outside the notebook
-- Support for multiple storm runs with one .Run()
-- Allow user to specify if they want to see all new tracks or only those in the release window (currently will show both the first time an artist is added)
+- Detailing setup
+- Allowing for non-database runs (in case you don't want a backend or ML)
+- automatic playlist creation when making a new storm (via a configurator class)
+- disabling of MySQL component for database-less ML (risky)
 
 ## 2. Known Issues / Fixes
-- Timeout token issues if rerunning within the hour. Storm doesn’t know when token was started and thus assumes it has more time than it does. Simply rerun
-- 10,000 track limit on playlist writing. Use a smaller set of artists or a smaller time window on releases. The first pass on an artist gets a lot more
-- Max retries error occurs on some artists. Try changing up artists or just reload the notebook (often fixes it)
+- 
 
 ## 3. Helpful Links
 - Spotify Web API: https://developer.spotify.com/documentation/web-api/
 - Spotipy documentation: https://spotipy.readthedocs.io/en/2.16.1/
 
-Feel free to reach out with any suggested improvements!
+Feel free to reach out if you would like to start using this code. It's not exactly user-friendly right now.
 
