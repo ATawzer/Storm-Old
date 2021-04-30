@@ -139,6 +139,7 @@ class StormAnalyticsGenerator:
                 run_df.loc[run["_id"], 'storm_name'] = storm
                 run_df.loc[run['_id'], 'run_date'] = run['run_date']
                 run_df.loc[run['_id'], 'start_date'] = run['start_date']
+                run_df.loc[run['_id'], 'storm_name'] = storm
 
                 # Direct Aggregations
                 agg_keys = ['playlists', 'input_tracks', 'input_artists', 'eligible_tracks', 
