@@ -16,6 +16,7 @@ pyodbc = "*"
 mysql-connector-python = "*"
 sqlalchemy = "*"
 pymysql = "*"
+cryptography = "*"
 
 [dev-packages]
 
