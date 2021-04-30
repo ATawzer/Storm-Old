@@ -8,9 +8,15 @@ import os
 import datetime as dt
 import time
 import json
+from dotenv import load_dotenv
+load_dotenv()
 
 # Internal
 from src.db import *
+from src.storm import Storm
+
+Storm(['contemporary_lyrical']).Run()
+
 
 
 sdb = StormDB()

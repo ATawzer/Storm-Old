@@ -3,7 +3,9 @@ from sys import getsizeof
 import json
 from pymongo import MongoClient
 import pandas as pd
+import tqdm as tqdm
 import numpy as np
+import datetime as dt
 from timeit import default_timer as timer
 import pymysql
 from sqlalchemy import create_engine
