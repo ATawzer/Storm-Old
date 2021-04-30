@@ -388,6 +388,36 @@ class StormDB:
             return [] # not good, for downstream bug fixing
             raise ValueError(f"Track {track} not found or doesn't have any artists.")
 
+    def get_tracks(self):
+        """
+        Returns a list of all tracks in the database.
+        """
+        q = {}
+        cols = {"_id":1}
+        r = list(self.tracks.find(q, cols))
+
+        return [x["_id"] for x in r]
+
+    def get_track_info(self, track_ids):
+        """
+        Returns all available information for every track in track_ids.
+        Done in batches as it is a large database.
+        """
+
+        # Check if needs to be done in batches
+        id_lim = 50000
+        batches = np.array_split(track_ids, int(np.ceil(len(track_ids)/id_lim)))
+        result = []
+        for batch in tqdm(batches):
+
+            q = {"_id":{"$in":batch.tolist()}}
+            cols = {"artists":0, "audio_analysis":0}
+            r = list(self.tracks.find(q, cols))
+            result.extend(r)
+
+        return result
+
+
     # Track Write Endpoints
     def update_tracks(self, track_info_list):
         """

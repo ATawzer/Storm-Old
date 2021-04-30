@@ -113,7 +113,7 @@ class StormAnalyticsGenerator:
             df.loc[playlist_id, "description"] = playlist_data["info"]["description"]
             df.loc[playlist_id, "last_collected"] = playlist_data["last_collected"]
 
-        df.index.rename("playlist_id", inplace=True)
+        df.index.rename("playlist", inplace=True)
         return df.reset_index()
 
     # Run Views
@@ -136,6 +136,7 @@ class StormAnalyticsGenerator:
             for run in self.tqdm(runs):
 
                 # Copying
+                run_df.loc[run["_id"], 'storm_name'] = storm
                 run_df.loc[run['_id'], 'run_date'] = run['run_date']
                 run_df.loc[run['_id'], 'start_date'] = run['start_date']
 
@@ -161,7 +162,19 @@ class StormAnalyticsGenerator:
         df.index.rename('run_id', inplace=True)
         return df.reset_index()
 
+    def gen_v_track_info(self, tracks=[]):
+        """
+        Essentially a copy and paste of the tracks in the DB
+        """
+        
+        if len(tracks) == 0:
+            self.print("No tracks supplied, running it for all.")
+            tracks = self.sdb.get_tracks()
 
+        df = pd.DataFrame(self.sdb.get_track_info(tracks))
+        df.rename(columns={'_id':'track'})
+
+        return df
 
 class StormAnalyticsController:
     """
@@ -181,7 +194,8 @@ class StormAnalyticsController:
         self.view_map = {'single_playlist_history':self.sag.gen_v_single_playlist_history,
                              'playlist_history':self.sag.gen_v_playlist_history,                                                 
                              'playlist_info':self.sag.gen_v_playlist_info,
-                             'run_history':self.sag.gen_v_run_history}
+                             'run_history':self.sag.gen_v_run_history,
+                             'track_info':self.sag.gen_v_track_info}
         
         # Verbocity
         self.print = print if verbocity > 0 else lambda x: None
@@ -205,7 +219,8 @@ class StormAnalyticsController:
             # SDB -> SADB
             pipeline['view_generation_pipeline'] = [('playlist_history', {"playlist_ids":[]}),
                                                     ('playlist_info', {"playlist_ids":[]}),
-                                                    ('run_history', {"storm_names":[]})]
+                                                    ('run_history', {"storm_names":[]}),
+                                                    ('track_info', {"tracks":[]})]
 
         else:
             pipeline = custom_pipeline
