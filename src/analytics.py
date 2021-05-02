@@ -177,6 +177,30 @@ class StormAnalyticsGenerator:
 
         return df
 
+    def gen_ml_v_storm_track_membership(self, storm_names=[], target_group='good'):
+        """
+        Generates a list of tracks that meet target group for particular storm
+        """
+        if len(storm_names) == 0:
+            self.print("No storm names supplied, running it for all.")
+            storm_names = self.sdb.get_all_configs()
+
+        for storm in self.tqdm(storm_names):
+            config = self.sdb.get_config(storm)
+
+            if target_group in ['good', 'all']:
+
+                # Generate view for good playlist
+                good = config['good_targets']
+
+            elif target_group in ['great', 'all']:
+
+                # Generate view for great playlist
+                great = config['great_targets']
+
+
+
+
 class StormAnalyticsController:
     """
     Wraps around a StormDB (Mongo backend) and a StormAnalyticsDB (MySQL analytics DB) to generate 
