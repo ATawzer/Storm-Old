@@ -198,6 +198,25 @@ class StormAnalyticsGenerator:
                 # Generate view for great playlist
                 great = config['great_targets']
 
+    def gen_ml_v_storm_tracks(self, storm_names=[]):
+        """
+        Tracks by storm and date that could've been listened to.
+        These are actuals, meaning these tracks must have moved through a storm
+        See gen_ml_v_storm_tracks_inferred for a view that is not actuals, 
+        but hypothetical storm tracks in a date range.
+        """
+        if len(storm_names) == 0:
+            self.print("No storm names supplied, running it for all.")
+            storm_names = self.sdb.get_all_configs()
+
+    def gen_ml_v_storm_tracks_inferred(self, start_at='2020-01-01', end_at='2021-05-01', storm_names=[]):
+        """
+        Uses track release dates to build hypothetical historical storm tracks
+        and then writes a view identical to gen_ml_v_storm_tracks for that
+        hypothetical track list. This allows for a set of targets to be built
+        in the same fashion that an ongiong training loop would have.
+        """
+
 
 
 
