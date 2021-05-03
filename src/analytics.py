@@ -186,7 +186,7 @@ class StormAnalyticsGenerator:
 
         return df
 
-    def gen_v_storm_track_membership(self, storm_names=[], target_group='good'):
+    def gen_v_storm_target_membership(self, storm_names=[], target_group='good'):
         """
         Generates a list of tracks that meet target group for particular storm
         """
@@ -245,7 +245,7 @@ class StormAnalyticsController:
                              'playlist_info':self.sag.gen_v_playlist_info,
                              'run_history':self.sag.gen_v_run_history,
                              'track_info':self.sag.gen_v_track_info,
-                             }
+                             'storm_target_membership':self.sag.gen_v_storm_target_membership}
         
         # Verbocity
         self.print = print if verbocity > 0 else lambda x: None
