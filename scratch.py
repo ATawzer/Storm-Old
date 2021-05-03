@@ -20,6 +20,8 @@ Storm(['contemporary_lyrical']).Run()
 
 
 sdb = StormDB()
+test_ = test[:10]
+test = sdb.get_tracks()
 sdb.get_runs_by_storm('film_vg_instrumental')
 
 sac = StormAnalyticsController()
@@ -31,6 +33,6 @@ pipeline['view_generation_pipeline'] = [('playlist_info', {"playlist_ids":[]}),
 sac.analytics_pipeline(pipeline)
 
 sac = StormAnalyticsController()
-params = {'storm_names':[]}
-name = 'run_history'
+params = {'tracks':[]}
+name = 'track_info'
 test = sac.gen_view(name, params)

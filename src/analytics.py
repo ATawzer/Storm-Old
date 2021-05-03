@@ -175,9 +175,18 @@ class StormAnalyticsGenerator:
         df = pd.DataFrame(self.sdb.get_track_info(tracks))
         df.rename(columns={'_id':'track'})
 
+        # Release Date
+        album_release_dates = self.sdb.get_album_field(df.album_id.unique().tolist(), ['release_date'])
+        release_date_dict = {}
+
+        for album in album_release_dates:
+            release_date_dict[album['_id']] = album['release_date']
+
+        df['release_date'] = df.album_id.apply(lambda x: release_date_dict[x])
+
         return df
 
-    def gen_ml_v_storm_track_membership(self, storm_names=[], target_group='good'):
+    def gen_v_storm_target_membership(self, storm_names=[], target_group='good'):
         """
         Generates a list of tracks that meet target group for particular storm
         """
@@ -187,16 +196,31 @@ class StormAnalyticsGenerator:
 
         for storm in self.tqdm(storm_names):
             config = self.sdb.get_config(storm)
+            df = pd.DataFrame(columns=['track_id', 'storm_name', 'target_group'])
 
             if target_group in ['good', 'all']:
 
                 # Generate view for good playlist
                 good = config['good_targets']
+                tracks = self.sdb.get_loaded_playlist_tracks(good)
+
+                temp = pd.DataFrame(tracks, index=[x for x in range(len(tracks))], columns=['track_id'])
+                temp['target_group'] = 'good'
+                df = pd.concat([df, temp])
 
             elif target_group in ['great', 'all']:
 
                 # Generate view for great playlist
                 great = config['great_targets']
+                tracks = self.sdb.get_loaded_playlist_tracks(great)
+
+                temp = pd.DataFrame(tracks, index=[x for x in range(len(tracks))], columns=['track_id'])
+                temp['target_group'] = 'great'
+                df = pd.concat([df, temp])
+
+            df['storm_name'] = storm
+        
+        return df
 
     def gen_ml_v_storm_tracks(self, storm_names=[]):
         """
@@ -239,7 +263,8 @@ class StormAnalyticsController:
                              'playlist_history':self.sag.gen_v_playlist_history,                                                 
                              'playlist_info':self.sag.gen_v_playlist_info,
                              'run_history':self.sag.gen_v_run_history,
-                             'track_info':self.sag.gen_v_track_info}
+                             'track_info':self.sag.gen_v_track_info,
+                             'storm_target_membership':self.sag.gen_v_storm_target_membership}
         
         # Verbocity
         self.print = print if verbocity > 0 else lambda x: None
