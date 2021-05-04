@@ -194,10 +194,11 @@ class StormAnalyticsGenerator:
             self.print("No storm names supplied, running it for all.")
             storm_names = self.sdb.get_all_configs()
 
+        df = pd.DataFrame(columns=['track_id', 'storm_name', 'target_group'])
         for storm in self.tqdm(storm_names):
             config = self.sdb.get_config(storm)
-            df = pd.DataFrame(columns=['track_id', 'storm_name', 'target_group'])
-
+            storm_df = pd.DataFrame(columns=['track_id', 'storm_name', 'target_group'])
+            
             if target_group in ['good', 'all']:
 
                 # Generate view for good playlist
@@ -206,9 +207,9 @@ class StormAnalyticsGenerator:
 
                 temp = pd.DataFrame(tracks, index=[x for x in range(len(tracks))], columns=['track_id'])
                 temp['target_group'] = 'good'
-                df = pd.concat([df, temp])
+                storm_df = pd.concat([storm_df, temp])
 
-            elif target_group in ['great', 'all']:
+            if target_group in ['great', 'all']:
 
                 # Generate view for great playlist
                 great = config['great_targets']
@@ -216,9 +217,10 @@ class StormAnalyticsGenerator:
 
                 temp = pd.DataFrame(tracks, index=[x for x in range(len(tracks))], columns=['track_id'])
                 temp['target_group'] = 'great'
-                df = pd.concat([df, temp])
+                storm_df = pd.concat([storm_df, temp])
 
-            df['storm_name'] = storm
+            storm_df['storm_name'] = storm
+            df = pd.concat([df, storm_df])
         
         return df
 
@@ -268,7 +270,8 @@ class StormAnalyticsController:
             pipeline['view_generation_pipeline'] = [('playlist_history', {"playlist_ids":[]}),
                                                     ('playlist_info', {"playlist_ids":[]}),
                                                     ('run_history', {"storm_names":[]}),
-                                                    ('track_info', {"tracks":[]})]
+                                                    ('track_info', {"tracks":[]}),
+                                                    ('storm_target_membership', {"target_group":'all'})]
 
         else:
             pipeline = custom_pipeline
