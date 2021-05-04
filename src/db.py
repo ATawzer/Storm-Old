@@ -333,6 +333,23 @@ class StormDB:
 
         return [x['_id'] for x in r]
 
+    def get_album_info(self, album_ids, fields={"added_to_artists":0, "tracks":0, "artists":0}):
+        """
+        Returns specified information about a list of albums.
+        """
+
+        id_lim = 50000
+        batches = np.array_split(album_ids, int(np.ceil(len(album_ids)/id_lim)))
+        result = []
+        for batch in tqdm(batches):
+
+            q = {"_id":{"$in":batch.tolist()}}
+            cols = fields
+            r = list(self.albums.find(q, cols))
+            result.extend(r)
+
+        return result
+
     # Album Write Endpoints
     def update_albums(self, album_info):
         """
@@ -398,7 +415,7 @@ class StormDB:
 
         return [x["_id"] for x in r]
 
-    def get_track_info(self, track_ids):
+    def get_track_info(self, track_ids, fields={"artists":0, "audio_analysis":0}):
         """
         Returns all available information for every track in track_ids.
         Done in batches as it is a large database.
@@ -411,7 +428,7 @@ class StormDB:
         for batch in tqdm(batches):
 
             q = {"_id":{"$in":batch.tolist()}}
-            cols = {"artists":0, "audio_analysis":0}
+            cols = fields
             r = list(self.tracks.find(q, cols))
             result.extend(r)
 
