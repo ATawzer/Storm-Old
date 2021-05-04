@@ -163,6 +163,7 @@ class StormAnalyticsGenerator:
         df.index.rename('run_id', inplace=True)
         return df.reset_index()
 
+    # Track Views
     def gen_v_track_info(self, tracks=[]):
         """
         Essentially a copy and paste of the tracks in the DB
@@ -224,6 +225,37 @@ class StormAnalyticsGenerator:
         
         return df
 
+    def gen_v_storm_run_membership(self, storm_names=[]):
+        """
+        Tracks by storm and date they were included in a storm run.
+        This uses the run_records storm_tracks field.
+        """
+        if len(storm_names) == 0:
+            self.print("No storm names supplied, running it for all.")
+            storm_names = self.sdb.get_all_configs()
+
+        df = pd.DataFrame(columns=['track_id', 'run_id'])
+        for storm in self.tqdm(storm_names):
+            self.print(f"{storm}")
+            runs = self.sdb.get_runs_by_storm(storm)
+            storm_df = pd.DataFrame(columns=['track_id', "run_id"])
+
+            for run in self.tqdm(runs):
+
+                tracks = run['storm_tracks']
+                run_df = pd.DataFrame(index=tracks, columns=["run_id"])
+                run_df["run_id"] = run["_id"]
+                
+                
+                run_df.index.rename('track_id', inplace=True)
+                run_df.reset_index(inplace=True)
+                storm_df = pd.concat([storm_df, run_df])
+
+
+            df = pd.concat([df, storm_df])
+
+        return df
+
     def gen_ml_v_storm_tracks(self, storm_names=[]):
         """
         Tracks by storm and date that could've been listened to.
@@ -264,7 +296,8 @@ class StormAnalyticsController:
                              'playlist_info':self.sag.gen_v_playlist_info,
                              'run_history':self.sag.gen_v_run_history,
                              'track_info':self.sag.gen_v_track_info,
-                             'storm_target_membership':self.sag.gen_v_storm_target_membership}
+                             'storm_target_membership':self.sag.gen_v_storm_target_membership,
+                             'storm_run_membership':self.sag.gen_v_storm_run_membership}
         
         # Verbocity
         self.print = print if verbocity > 0 else lambda x: None
@@ -290,7 +323,8 @@ class StormAnalyticsController:
                                                     ('playlist_info', {"playlist_ids":[]}),
                                                     ('run_history', {"storm_names":[]}),
                                                     ('track_info', {"tracks":[]}),
-                                                    ('storm_target_membership', {"target_group":'all'})]
+                                                    ('storm_target_membership', {"target_group":'all'}),
+                                                    ('storm_run_membership', {})]
 
         else:
             pipeline = custom_pipeline
