@@ -15,9 +15,10 @@ load_dotenv()
 from src.db import *
 from src.storm import Storm
 
-Storm(['contemporary_lyrical']).Run()
+Storm(['film_vg_instrumental']).Run()
 
-
+sag = StormAnalyticsGenerator()
+sag.gen_v_storm_run_membership()
 
 sdb = StormDB()
 test_ = test[:10]
@@ -25,14 +26,17 @@ test = sdb.get_tracks()
 sdb.get_runs_by_storm('film_vg_instrumental')
 
 sac = StormAnalyticsController()
-sac.analytics_pipeline()
 
 pipeline = {}
-pipeline['view_generation_pipeline'] = [('playlist_info', {"playlist_ids":[]}),
-                                                    ('run_history', {"storm_names":[]})]
+pipeline['view_generation_pipeline'] = [('inferred_storm_run_membership', {})]
 sac.analytics_pipeline(pipeline)
 
 sac = StormAnalyticsController()
 params = {'tracks':[]}
 name = 'track_info'
 test = sac.gen_view(name, params)
+
+[x.strftime("%Y-%m-%d") for x in pd.date_range('2020-01-07', '2021-01-14', freq='w').tolist()]
+
+fr = FakeRunner('film_vg_instrumental', '2020-01-07', '2020-01-14')
+test = fr.Run()

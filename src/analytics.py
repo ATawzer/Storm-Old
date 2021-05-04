@@ -21,6 +21,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from .db import *
+from .runner import FakeRunner
 
 class StormAnalyticsGenerator:
     """
@@ -163,6 +164,59 @@ class StormAnalyticsGenerator:
         df.index.rename('run_id', inplace=True)
         return df.reset_index()
 
+    def gen_v_inferred_run_history(self, storm_names=[], start='2020-01-01'):
+        """
+        Generates hypothetical storms runs from a start date, mostly used for ML
+        and for potentially sizing up the impacts of a storm configuration change.
+        """
+        # Storm Names
+        if len(storm_names) == 0:
+            self.print("No storm names supplied, running it for all.")
+            storm_names = self.sdb.get_all_configs()
+
+        df = pd.DataFrame()
+        end = dt.datetime.now().strftime("%Y-%m-%d")
+        self.print(f"Generating hypothetical runs for {len(storm_names)} Storms.")
+        for storm in storm_names:
+            self.print(f"{storm}")
+
+            self.print(f"Generating dates between {start} and {end}")
+            dates = [x.strftime("%Y-%m-%d") for x in pd.date_range(start, end, freq='w').tolist()]
+            run_df = pd.DataFrame(index=[f'simu_run_{storm}_{"".join(x.split("-"))}' for x in dates])
+
+            for i in self.tqdm(range(len(dates)-1)):
+
+                run = FakeRunner(storm, start_date=dates[i], run_date=dates[i+1], verbocity=0).Run()
+                run_id = f'simu_run_{storm}_{"".join(dates[i].split("-"))}'
+
+                # Copying
+                run_df.loc[run_id, 'storm_name'] = storm
+                run_df.loc[run_id, 'run_date'] = run['run_date']
+                run_df.loc[run_id, 'start_date'] = run['start_date']
+                run_df.loc[run_id, 'storm_name'] = storm
+
+                # Direct Aggregations
+                agg_keys = ['input_artists', 'eligible_tracks', 
+                            'storm_tracks', 'storm_artists', 'storm_albums', 'removed_artists', 'removed_tracks',
+                            'storm_sample_tracks']
+
+                for key in agg_keys:
+                    run_df.loc[run_id, f"{key}_cnt"] = len(run[key])
+
+                # Computations
+                run_df.loc[run_id, 'days'] = 7
+
+            # df Computations
+            run_df['storm_tracks_per_artist'] = run_df['storm_tracks_cnt'] / run_df['storm_artists_cnt']
+            run_df['storm_tracks_per_day'] = run_df['storm_tracks_cnt'] / run_df['days']
+            run_df['storm_tracks_per_artist_day'] = run_df['storm_tracks_per_day'] / run_df['storm_artists_cnt']
+
+            df = pd.concat([df, run_df])
+
+        df.index.rename('run_id', inplace=True)
+        return df.reset_index()
+        
+
     # Track Views
     def gen_v_track_info(self, tracks=[]):
         """
@@ -256,6 +310,49 @@ class StormAnalyticsGenerator:
 
         return df
 
+    def gen_v_inferred_storm_run_membership(self, storm_names=[], start='2020-01-01'):
+        """
+        Tracks by storm and date they were included in a hypoethetical storm_run.
+        Since this a theoretical run it lives entirely within the SADB.
+        """
+
+        # Storms
+        if len(storm_names) == 0:
+            self.print("No storm names supplied, running it for all.")
+            storm_names = self.sdb.get_all_configs()
+
+        end = dt.datetime.now().strftime("%Y-%m-%d")
+        df = pd.DataFrame(columns=['track_id', 'run_id'])
+        for storm in self.tqdm(storm_names):
+            self.print(f"{storm}")
+            runs = self.sdb.get_runs_by_storm(storm)
+            storm_df = pd.DataFrame(columns=['track_id', "run_id"])
+
+            self.print(f"Generating dates between {start} and {end}")
+            dates = [x.strftime("%Y-%m-%d") for x in pd.date_range(start, end, freq='w').tolist()]
+            run_df = pd.DataFrame(index=[f'simu_run_{storm}_{"".join(x.split("-"))}' for x in dates])
+
+            for i in self.tqdm(range(len(dates)-1)):
+
+                run = FakeRunner(storm, start_date=dates[i], run_date=dates[i+1], verbocity=0).Run()
+                run_id = f'simu_run_{storm}_{"".join(dates[i].split("-"))}'
+
+                tracks = run['storm_tracks']
+                run_df = pd.DataFrame(index=tracks, columns=["run_id"])
+                run_df["run_id"] = run_id
+                
+                
+                run_df.index.rename('track_id', inplace=True)
+                run_df.reset_index(inplace=True)
+                storm_df = pd.concat([storm_df, run_df])
+
+
+            df = pd.concat([df, storm_df])
+
+        return df
+
+        
+    # ML Views
     def gen_ml_v_storm_tracks(self, storm_names=[]):
         """
         Tracks by storm and date that could've been listened to.
@@ -274,6 +371,7 @@ class StormAnalyticsGenerator:
         hypothetical track list. This allows for a set of targets to be built
         in the same fashion that an ongiong training loop would have.
         """
+        return None
 
 
 class StormAnalyticsController:
@@ -297,7 +395,9 @@ class StormAnalyticsController:
                              'run_history':self.sag.gen_v_run_history,
                              'track_info':self.sag.gen_v_track_info,
                              'storm_target_membership':self.sag.gen_v_storm_target_membership,
-                             'storm_run_membership':self.sag.gen_v_storm_run_membership}
+                             'storm_run_membership':self.sag.gen_v_storm_run_membership,
+                             'inferred_run_history':self.sag.gen_v_inferred_run_history,
+                             'inferred_storm_run_membership':self.sag.gen_v_inferred_storm_run_membership}
         
         # Verbocity
         self.print = print if verbocity > 0 else lambda x: None
