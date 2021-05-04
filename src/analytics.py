@@ -176,7 +176,7 @@ class StormAnalyticsGenerator:
         df.rename(columns={'_id':'track'})
 
         # Release Date
-        album_release_dates = self.sdb.get_album_field(df.album_id.unique().tolist(), ['release_date'])
+        album_release_dates = self.sdb.get_album_info(df.album_id.unique().tolist(), fields={"_id":1, "release_date":1})
         release_date_dict = {}
 
         for album in album_release_dates:
@@ -221,8 +221,6 @@ class StormAnalyticsGenerator:
             df['storm_name'] = storm
         
         return df
-
-
 
 
 class StormAnalyticsController:
