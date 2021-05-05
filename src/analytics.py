@@ -426,6 +426,9 @@ class StormAnalyticsController:
                                                     ('storm_target_membership', {"target_group":'all'}),
                                                     ('storm_run_membership', {})]
 
+            # SADB -> SADB
+            pipeline['view_aggregation_pipeline'] = []
+
         else:
             pipeline = custom_pipeline
 
@@ -465,6 +468,26 @@ class StormAnalyticsController:
 
         start = timer()
         self.sadb.write_table(name, data, **kwargs)
+        end = timer()
+
+        self.print("View Written!")
+        self.print(f"Elapsed Time to Write: {round(end-start, 4)}s \n")
+
+    def sql_to_sql(self, query_name, query_params={}, processing=False, **kwargs):
+        """
+        Reads in a query and writes the data back out. 
+        Can do non-sql processing in between.
+        """
+        start = timer()
+        self.print("Reading . . .")
+        df = self.sadb.read_table(q=open(f'queries/{query_name}.sql', 'r').read().format(**query_params))
+
+        self.print("Processing . . .")
+        if processing:
+            self.print("do processing.")
+
+        self.print("Writing . . .")
+        self.write_view(query_name, df)
         end = timer()
 
         self.print("View Written!")

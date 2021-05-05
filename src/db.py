@@ -533,7 +533,7 @@ class StormAnalyticsDB:
                                 port=os.getenv("mysql_port")))
         self.cxn = self.db_engine.connect()
 
-    def read_table(self, table, q=None):
+    def read_table(self, table=None, q=None):
         """
         Reads a table from the SADB by name or query
         """
@@ -543,10 +543,12 @@ class StormAnalyticsDB:
         else:
             df = pd.read_sql_query(q, self.cxn)
 
-    def write_table(self, table, df, method='overwrite'):
+        return df
+
+    def write_table(self, table, df, method='overwrite', schema='storm_analytics'):
         """
         writes a pandas dataframe into the DB.
         """
 
         if method == "overwrite":
-            df.to_sql(table, self.cxn, if_exists='replace', index=False)
+            df.to_sql(table, self.cxn, if_exists='replace', schema=schema, index=False)
