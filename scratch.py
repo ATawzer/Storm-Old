@@ -13,6 +13,7 @@ load_dotenv()
 
 # Internal
 from src.db import *
+from src.analytics import *
 from src.storm import Storm
 
 Storm(['film_vg_instrumental']).Run()
@@ -28,7 +29,8 @@ sdb.get_runs_by_storm('film_vg_instrumental')
 sac = StormAnalyticsController()
 
 pipeline = {}
-pipeline['view_generation_pipeline'] = [('inferred_storm_run_membership', {})]
+pipeline['view_generation_pipeline'] = [('inferred_run_history', {'start':'2008-01-01'}),
+                                        ('inferred_storm_run_membership', {'start':'2008-01-01'})]
 sac.analytics_pipeline(pipeline)
 
 sac = StormAnalyticsController()
