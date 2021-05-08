@@ -16,23 +16,13 @@ from src.db import *
 from src.storm import Storm
 
 config = {
-        'pipeline_cfg':{'supervision_table':'inferred_supervised_storm_tracks',
+        'pipeline_cfg':{
             'storm_name':'film_vg_instrumental',
             'start_date':'2018-01-01',
             'end_date':'2021-05-05',
-            'base_data':{
-                'columns':{'logic':'exclude', 'names':['run_id', 'name', 'run_date', 'album_id', 'audio_features', 'last_updated']}
-            },
-            'pre_split_transformations':['fill_missing'],
-            'partioning':{
-                'freq':'w'
-            },
+            'track_features':{"artists":0, "audio_analysis":0}
+            #'pre_split_transformations':['']
             #'post_split_transformations':['']
-            'train_partioning':{
-                'X_cols':{'logic':'exclude', 'names':['target_track']},
-                'y_col':'target_track',
-                'train_test_split':False
-            }
         }
 }
 

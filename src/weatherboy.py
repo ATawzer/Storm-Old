@@ -15,31 +15,72 @@ from .db import *
 class WeatherBoy:
     """
     Endpoint prediction, leverages pre-trained models.
-    Spins up a model using a configuration_id.
+    Loads a model using a configuration_id.
     If it doesn't know one it will default to that storm's best guess.
+
+    WeatherMan can control models and pipelines after instantiation separately
+    for rapid experiementation but on production runs it will run
+    the entirety of the process.
     """
 
-    def __init__(self, storm_name, weather_boy_config_id=None):
+    def __init__(self, tracks, storm_name, weather_boy_config_id=None, verbocity=3):
 
         self.storm = storm_name
         self.cfg_id = weather_boy_config_id
+        self.tracks = tracks
+        self.scores = {track:0 for track in tracks}
+
+        # To be loaded
+        self.model_cfg = {}
+        self.pipeline_cfg = {}
+
+        # Load
+        self.load_config(weather_boy_config_id)
+
+        # pipeline
+        self.pipeline = WeatherBoyPipeline(tracks, pipeline_cfg, verbocity=verbocity-1)
+        self.pipeline.Load()
+
+        # model
+        self.model = WeatherBoyModel(model_cfg, verbocity=verbocity-1)
+        self.model.Load()
+
+    def load_config(self):
+        """
+        Loads the model and pipeline configurations from the SDB.
+        """
+
+        cfg = self.sdb.get_wb_config(self.cfg_id)
+        self.pipeline_cfg, self.model_cfg = cfg['pipeline'], cfg['model']
+
+    def get_scores(self):
+        """
+        Given a loaded model and pipeline, get the prediction scores per track.
+        """
+    
+        self.scores = self.model.Predict(self.pipeline['X']) # returns in dict format
+
 
     def rank_order():
 
         return False
 
+
+
+
 class WeatherBoyPipeline:
     """
-    Builds data dictionaries from pipeline configurations.
-    Backbone of the entire training process, handles all flow
-    from a weatherboy to a backend
+    Sources the feautures and targets for a set of tracks.
+    Needs a pipline configuration
     """
-    def __init__(self, config, verbocity=2, mode='inferred'):
+    def __init__(self, tracks, config, verbocity=2, mode='inferred', train=False):
 
-        self.dd = {}
-        self.cfg = config
+        self.X = pd.DataFrame()
+        self.y = []
         self.data = pd.DataFrame()
+        self.cfg = config
         self.mode = mode
+        self.train = train
 
         # Database connections
         self.sadb = StormAnalyticsDB()
@@ -60,7 +101,7 @@ class WeatherBoyPipeline:
         """
         self.print("Checking for configuration validity.")
 
-        check_keys = ['supervision_table', 'storm_name', 'base_data', 'start_date', 'end_date']
+        check_keys = ['storm_name', 'base_data', 'train_partioning', 'start_date', 'end_date']
 
         if not set(check_keys).issubset(set(self.cfg.keys())):
             raise KeyError(f"Configuration missing parameters. Specify: {set(check_keys) - set(self.cfg.keys())}")
@@ -98,36 +139,31 @@ class WeatherBoyPipeline:
 
     def load_base(self):
         """
-        Loads the right base data on a configuration. Think of it like the main pipe
-        all ml will be based on. Training datasets will be split off from this pipe
-        and prediction data will be flowing through under one pipeline to ensure
-        prediction data matches input data.
+        Loads a base set of data by which to pair down for the specific configuration.
+        In a future state, there will be 3 main sets of features:
+        - tracks (included now, spotify's features for now)
+        - albums (feature engineering at album level)
+        - artists (feature engineering at artist level)
         """
-        self.data = self.sadb.read_table(self.cfg['supervision_table']).set_index('_id')
-        
-        # Storm Filter
-        self.data = self.data[self.data['run_id'].str.contains(self.cfg['storm_name'])]
-        
 
-        # field filter
-        if self.cfg['base_data']['columns']['logic'] == 'exclude':
-            self.data = self.data[set(self.data.columns) - set(self.cfg['base_data']['columns']['names'])]
-        elif self.cfg['base_data']['columns']['logic'] == 'include':
-            self.data = self.data[set(self.data.columns).intersection(set(self.cfg['base_data']['columns']['names']))]
+        self.data = self.sdb.get_track_info(self.tracks, self.cfg['track_features']).set_index('_id')
 
-        # Date range
-        if self.mode == 'inferred':
-            # Ignore the actual run structure and parition the data dict by week
-            self.data = self.data[(self.data.release_date > self.cfg['start_date']) & 
-                                  (self.data.release_date < self.cfg['end_date'])]
-            
-        elif self.mode == 'full_runs':
-            # Not supported yet, trains on true storm runs
-            return False
+        # Get targets if train
+        if self.train:
 
-        elif self.mode == 'sampled_runs':
-            # Not supported yet, trains on only tracks and targets devliered via sample
-            return False
+            # Date range
+            if self.mode == 'inferred':
+                # Ignore the actual run structure and parition the data dict by week
+                self.data = self.data[(self.data.release_date > self.cfg['start_date']) & 
+                                    (self.data.release_date < self.cfg['end_date'])]
+                
+            elif self.mode == 'full_runs':
+                # Not supported yet, trains on true storm runs
+                return False
+
+            elif self.mode == 'sampled_runs':
+                # Not supported yet, trains on only tracks and targets devliered via sample
+                return False
 
     # Data Dictionary Splits
     def partition_dd(self):
