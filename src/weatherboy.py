@@ -38,11 +38,11 @@ class WeatherBoy:
         self.load_config(weather_boy_config_id)
 
         # pipeline
-        self.pipeline = WeatherBoyPipeline(tracks, pipeline_cfg, verbocity=verbocity-1)
+        self.pipeline = WeatherBoyPipeline(tracks, self.pipeline_cfg, verbocity=verbocity-1)
         self.pipeline.Load()
 
         # model
-        self.model = WeatherBoyModel(model_cfg, verbocity=verbocity-1)
+        self.model = WeatherBoyModel(self.model_cfg, verbocity=verbocity-1)
         self.model.Load()
 
     def load_config(self):
@@ -65,25 +65,20 @@ class WeatherBoy:
 
         return False
 
-
-
-
 class WeatherBoyPipeline:
     """
     Sources the feautures and targets for a set of tracks.
     Needs a pipline configuration
     """
-    def __init__(self, tracks, config, verbocity=2, mode='inferred', train=False):
+    def __init__(self, tracks, config, verbocity=2, train=False):
 
         self.X = pd.DataFrame()
-        self.y = []
-        self.data = pd.DataFrame()
+        self.y = [] if train else None
+        self.tracks = tracks
         self.cfg = config
-        self.mode = mode
         self.train = train
 
-        # Database connections
-        self.sadb = StormAnalyticsDB()
+        # Database connection
         self.sdb = StormDB()
 
         # Verbocity
@@ -92,16 +87,13 @@ class WeatherBoyPipeline:
 
         self.validate_configuration()
 
-        # Pipeline reference
-        self.pref = {'fill_missing':self.fill_missing}
-
     def validate_configuration(self):
         """
         Checks for a valid configuration.
         """
         self.print("Checking for configuration validity.")
 
-        check_keys = ['storm_name', 'base_data', 'train_partioning', 'start_date', 'end_date']
+        check_keys = ['storm_name']
 
         if not set(check_keys).issubset(set(self.cfg.keys())):
             raise KeyError(f"Configuration missing parameters. Specify: {set(check_keys) - set(self.cfg.keys())}")
@@ -112,131 +104,94 @@ class WeatherBoyPipeline:
         """
         Primary Pipeline orchestration.
         """
-        self.print("Initializing base data pipeline.")
-        self.load_base()
-        self.print("Done!\n")
+        self.print(f"Loading Features for {len(self.tracks)} tracks.")
+        self.load_X()
 
-        # Performing global transformations, anything that is not dataset specific.
-        # Filling in missing values, removing certain non-data specific cases, etc.
-        # Additionally certain calculations (Valence/danceability for example)
-        self.print("Transforming Full Data.")
-        self.data = self.transform(self.data, self.cfg['pre_split_transformations'])
-        self.print("Done!\n")
+        if self.train:
+            self.print("Loading Targets.")
+            self.load_y()
 
-        # Splits data into smaller pieces by either run_date or release date
-        # depending on the mode
-        self.print(f"Mode: {self.mode}")
-        self.print("Partitioning Data Dictionary accordingly . . .")
-        self.partition_dd()
+        self.print("Pipeline Loaded!\n")
 
-        # Transformations that apply to the individual dataset
-        # Computations 
-        self.print("Transforming Partitioned Data")
-
-        # Splitting into X and y
-        self.print("Splitting into inputs and targets")
-        self.partition_input_and_target()
-
-    def load_base(self):
+    def load_X(self):
         """
-        Loads a base set of data by which to pair down for the specific configuration.
+        Get Feature Set, currently just the basic ones pulled out of Spotify.
         In a future state, there will be 3 main sets of features:
         - tracks (included now, spotify's features for now)
         - albums (feature engineering at album level)
         - artists (feature engineering at artist level)
         """
 
-        self.data = self.sdb.get_track_info(self.tracks, self.cfg['track_features']).set_index('_id')
+        self.X = pd.DataFrame(self.sdb.get_track_info(self.tracks))
 
-        # Get targets if train
-        if self.train:
-
-            # Date range
-            if self.mode == 'inferred':
-                # Ignore the actual run structure and parition the data dict by week
-                self.data = self.data[(self.data.release_date > self.cfg['start_date']) & 
-                                    (self.data.release_date < self.cfg['end_date'])]
-                
-            elif self.mode == 'full_runs':
-                # Not supported yet, trains on true storm runs
-                return False
-
-            elif self.mode == 'sampled_runs':
-                # Not supported yet, trains on only tracks and targets devliered via sample
-                return False
-
-    # Data Dictionary Splits
-    def partition_dd(self):
+    def load_y(self):
         """
-        Paritions .data based on mode.
+        Looks for track membership in the good targets for the given tracks.
         """
-        date_windows = []
-        if self.mode == 'inferred':
-            drange = pd.date_range(self.cfg['start_date'], self.cfg['end_date'], freq=self.cfg['partioning']['freq'])
-            drange = [x.strftime('%Y-%m-%d') for x in drange]
-            date_windows = [(drange[i], drange[i+1]) for i in range(len(drange)-1)]
-        else:
-            # Not suppored
-            return False
+        target_playlist_id = self.sdb.get_config(self.cfg['storm_name'])['good_targets']
+        target_tracks = self.sdb.get_loaded_playlist_tracks(target_playlist_id)
+        self.y = [1 if track in target_tracks else 0 for track in self.tracks]
 
-        # Partition
-        if self.mode == 'inferred':
-            for window in self.tqdm(date_windows):
-                self.dd[window[1]] = {}
-                self.dd[window[1]]['dataset'] = self.data[(self.data['release_date'] < window[1]) & 
-                                                          (self.data['release_date'] >= window[0])].copy()
-        else:
-            # Not supported
-            return False
 
-    def partition_input_and_target(self):
-        """
-        Splits every entry in dd into either X and y or X_train through y_test
-        """
-        for run, data in self.tqdm(self.dd.items()):
-            if not self.cfg['train_partioning']['train_test_split']:
-                # field filter
-                if self.cfg['train_partioning']['X_cols']['logic']  == 'exclude':
-                    self.dd[run]['X'] = data[set(data.columns) - set(self.cfg['train_partioning']['X_cols']['names'])]
-                elif self.cfg['train_partioning']['X_cols']['logic'] == 'include':
-                    self.dd[run]['X'] = data[set(data.columns).intersection(set(self.cfg['train_partioning']['X_cols']['names']))]
-
-                self.dd[run]['y'] = data[self.cfg['train_partioning']['y_col']]
-
-    # All Possible Pipeline transformations
-    def transform(self, df, transformations):
-        """
-        Runs through a sequence of transformations
-        """
-        for t in transformations:
-            df = self.pref[t](df)
-
-        return df
-
-    def fill_missing(self, df):
-        """
-        Fills in missing values with 0
-        """
-        return df.fillna(0)
-
-class WeatherBoyTrainer:
+class WeatherBoyModel:
     """
     Trains weatherboy(s) given a pipeline configuration.
     """
-    def __init__(self, config, verbocity=3):
+    def __init__(self, config, verbocity=2, train=False):
 
-        self.pipeline = WeatherBoyPipeline(config['pipeline_cfg'], verbocity-1)
+        self.cfg = config
+        self.is_fit = False
 
         # Verbocity
         self.print = print if verbocity > 0 else lambda x: None
         self.tqdm = lambda x: tqdm(x, leave=False) if verbocity > 1 else lambda x: x
 
-    
-    
+    def validate_configuration(self):
+        """
+        Checks for a valid configuration.
+        """
+        self.print("Checking for configuration validity.")
 
-class WeatherBoyValidator:
-    """
-    Validates
-    """
+        check_keys = ['model_path']
+
+        if not set(check_keys).issubset(set(self.cfg.keys())):
+            raise KeyError(f"Configuration missing parameters. Specify: {set(check_keys) - set(self.cfg.keys())}")
+
+        self.print("Configuration is valid!")
+
+    # Housekeeping
+    def Load(self):
+        """
+        Will load in the model information or create a new instance
+        if it isn't found
+        """
+
+        if os.path.exists(self.cfg['model_path']):
+            self.print(f"Model {self.cfg['model_id']} found! Loading in.")
+            self.model = self.load_model(self.cfg['model_path'], self.cfg['model_type'])
+        else:
+            self.print(f"No Model found for {self.cfg['model_id']}")
+
+        # Try to load in model info
+        if 'model_id' in self.cfg.keys():
+            self.model_id = self.cfg['model_id']
+            self.load_model(self.model_id)
+
+    def load_model(self, path, model_type):
+        """
+        Depending on model type it will load in the artifacts properly.
+        """
+        return None
+
+    # Core Methods
+    def Fit(self, X, y):
+        """
+        Fits a model given the configuration
+        """
+
+        
+
+    def Predict()
+    
 
 
