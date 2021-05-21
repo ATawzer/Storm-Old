@@ -414,7 +414,8 @@ class StormRunner:
 
         if self.last_run is not None:
             if 'run_date' in self.last_run.keys():
-                self.start_date = self.last_run['run_date']
+                #last_run_date = dt.strptime(self.last_run['run_date'], "%Y-%m-%d")
+                self.start_date = self.last_run['run_date'] #last_run_date + dt.timedelta(days=1)
                 self.run_record['start_date'] = self.start_date
         
         if self.start_date is None:

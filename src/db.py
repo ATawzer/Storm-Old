@@ -292,7 +292,7 @@ class StormDB:
         """
         Get all albums in date window
         """
-        q = {"release_date":{"$gte": start_date, "$lt": end_date}}
+        q = {"release_date":{"$gt": start_date, "$lte": end_date}}
         cols = {"_id":1}
         r = list(sdb.albums.find(q, cols))
 
@@ -327,7 +327,7 @@ class StormDB:
         [valid_albums.extend(x['albums']) for x in r if 'albums' in x]
 
         # Return the albums in this list that also meet date criteria
-        q = {"_id":{"$in":valid_albums}, "release_date":{"$gte": start_date, "$lte": end_date}}
+        q = {"_id":{"$in":valid_albums}, "release_date":{"$gt": start_date, "$lte": end_date}}
         cols = {"_id":1}
         r = list(self.albums.find(q, cols))
 
