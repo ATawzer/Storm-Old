@@ -17,6 +17,7 @@ mysql-connector-python = "*"
 sqlalchemy = "*"
 pymysql = "*"
 cryptography = "*"
+lightgbm = "*"
 
 [dev-packages]
 

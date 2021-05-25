@@ -6,6 +6,7 @@ import os
 import datetime as dt
 import time
 import json
+import joblib
 from dotenv import load_dotenv
 load_dotenv() 
 
@@ -39,11 +40,11 @@ class WeatherBoy:
 
         # pipeline
         self.pipeline = WeatherBoyPipeline(tracks, self.pipeline_cfg, verbocity=verbocity-1)
-        self.pipeline.Load()
+        self.pipeline.load()
 
         # model
         self.model = WeatherBoyModel(self.model_cfg, verbocity=verbocity-1)
-        self.model.Load()
+        self.model.load()
 
     def load_config(self):
         """
@@ -100,7 +101,7 @@ class WeatherBoyPipeline:
 
         self.print("Configuration is valid!")
 
-    def Load(self):
+    def load(self):
         """
         Primary Pipeline orchestration.
         """
@@ -160,38 +161,42 @@ class WeatherBoyModel:
         self.print("Configuration is valid!")
 
     # Housekeeping
-    def Load(self):
+    def load(self):
         """
         Will load in the model information or create a new instance
         if it isn't found
         """
 
-        if os.path.exists(self.cfg['model_path']):
+        if os.path.exists(f"{self.cfg['model_path']}/{self.cfg['model_id']}"):
             self.print(f"Model {self.cfg['model_id']} found! Loading in.")
-            self.model = self.load_model(self.cfg['model_path'], self.cfg['model_type'])
+            self.model = joblib.load(f"{self.cfg['model_path']}/{self.cfg['model_id']}")
         else:
             self.print(f"No Model found for {self.cfg['model_id']}")
+            self.model = LightGBMClassifier()
 
         # Try to load in model info
         if 'model_id' in self.cfg.keys():
             self.model_id = self.cfg['model_id']
             self.load_model(self.model_id)
 
-    def load_model(self, path, model_type):
-        """
-        Depending on model type it will load in the artifacts properly.
-        """
-        return None
-
     # Core Methods
-    def Fit(self, X, y):
+    def fit(self, X, y):
         """
-        Fits a model given the configuration
+        Fits a model given the configuration.
+        Only gets called if in Train mode
         """
 
-        
+    def evaluate(self, X, y):
+        """
+        Runs an evaluation of a model (suite of metrics)
+        Only gets called if in Train mode
+        """
 
-    def Predict()
+    def predict(self, X):
+        """
+        Generate scores for a feature set
+        """
+
     
 
 
