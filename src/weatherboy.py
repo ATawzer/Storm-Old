@@ -1,4 +1,7 @@
 # Modeling
+import lightgbm
+import shortuuid
+from sklearn.metrics import accuracy_score, precision_score, recall_score
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -6,6 +9,7 @@ import os
 import datetime as dt
 import time
 import json
+from lightgbm import LGBMClassifier, Dataset, sklearn
 import joblib
 from dotenv import load_dotenv
 load_dotenv() 
@@ -71,12 +75,12 @@ class WeatherBoyPipeline:
     Sources the feautures and targets for a set of tracks.
     Needs a pipline configuration
     """
-    def __init__(self, tracks, config, verbocity=2, train=False):
+    def __init__(self, tracks, storm_name, verbocity=2, train=False):
 
         self.X = pd.DataFrame()
         self.y = [] if train else None
+        self.storm_name = storm_name
         self.tracks = tracks
-        self.cfg = config
         self.train = train
 
         # Database connection
@@ -85,21 +89,6 @@ class WeatherBoyPipeline:
         # Verbocity
         self.print = print if verbocity > 0 else lambda x: None
         self.tqdm = lambda x: tqdm(x, leave=False) if verbocity > 1 else lambda x: x
-
-        self.validate_configuration()
-
-    def validate_configuration(self):
-        """
-        Checks for a valid configuration.
-        """
-        self.print("Checking for configuration validity.")
-
-        check_keys = ['storm_name']
-
-        if not set(check_keys).issubset(set(self.cfg.keys())):
-            raise KeyError(f"Configuration missing parameters. Specify: {set(check_keys) - set(self.cfg.keys())}")
-
-        self.print("Configuration is valid!")
 
     def load(self):
         """
@@ -112,7 +101,15 @@ class WeatherBoyPipeline:
             self.print("Loading Targets.")
             self.load_y()
 
-        self.print("Pipeline Loaded!\n")
+    def as_lgbm(self, targets=True, **kwargs):
+        """
+        Converts the pipeline into training ready data for the LGBM CLassifier.
+        This is ready to feed directly in
+        """
+        if targets:
+            return Dataset(self.X, label=self.y, **kwargs)
+        else:
+            return Dataset(self.X)
 
     def load_X(self):
         """
@@ -133,32 +130,36 @@ class WeatherBoyPipeline:
         target_tracks = self.sdb.get_loaded_playlist_tracks(target_playlist_id)
         self.y = [1 if track in target_tracks else 0 for track in self.tracks]
 
+    def get_info(self):
+        """
+        Returns the parameters and configuration decisions made for pipeline
+        """
+        return {
+            'tracks':self.tracks,
+            'storm_name':self.storm_name,
+            'features':self.X.columns
+        }
+
 
 class WeatherBoyModel:
     """
     Trains weatherboy(s) given a pipeline configuration.
     """
-    def __init__(self, config, verbocity=2, train=False):
+    def __init__(self, model_name=None, model_type='lgbm', hyper_params={}, output_dir='/models', verbocity=2, train=False):
 
-        self.cfg = config
         self.is_fit = False
+        self.output_dir = output_dir
+        if model_name is None:
+            self.model_name = f'{self.model_type}_{dt.datetime.now().strftime("%y%m%d")}_{shortuuid.ShortUUID().random(length=6)}'
+        else:
+            self.model_name = model_name
+
+        self.model_type = model_type
+        self.hyper_params = hyper_params
 
         # Verbocity
         self.print = print if verbocity > 0 else lambda x: None
         self.tqdm = lambda x: tqdm(x, leave=False) if verbocity > 1 else lambda x: x
-
-    def validate_configuration(self):
-        """
-        Checks for a valid configuration.
-        """
-        self.print("Checking for configuration validity.")
-
-        check_keys = ['model_path']
-
-        if not set(check_keys).issubset(set(self.cfg.keys())):
-            raise KeyError(f"Configuration missing parameters. Specify: {set(check_keys) - set(self.cfg.keys())}")
-
-        self.print("Configuration is valid!")
 
     # Housekeeping
     def load(self):
@@ -167,36 +168,75 @@ class WeatherBoyModel:
         if it isn't found
         """
 
-        if os.path.exists(f"{self.cfg['model_path']}/{self.cfg['model_id']}"):
-            self.print(f"Model {self.cfg['model_id']} found! Loading in.")
-            self.model = joblib.load(f"{self.cfg['model_path']}/{self.cfg['model_id']}")
-        else:
-            self.print(f"No Model found for {self.cfg['model_id']}")
-            self.model = LightGBMClassifier()
-
-        # Try to load in model info
-        if 'model_id' in self.cfg.keys():
-            self.model_id = self.cfg['model_id']
-            self.load_model(self.model_id)
+        if self.model_type == 'lgbm':
+            if os.path.exists(f"{self.output_dir}/{self.model_name}/model.txt"):
+                self.model = LGBMClassifier().fit(init_model=f"{self.output_dir}/{self.model_name}/model.txt")
+                self.is_fit = True
+            else:
+                raise FileNotFoundError(f"{self.model_name} not found.")
 
     # Core Methods
-    def fit(self, X, y):
+    def fit(self, wbp):
         """
         Fits a model given the configuration.
         Only gets called if in Train mode
+        Pass in a loaded weatherboy pipeline to use.
         """
 
-    def evaluate(self, X, y):
+        if self.model_type == 'lgbm':
+            self.model = LGBMClassifier(**self.hyper_params)
+            self.model.fit(wbp.as_lgbm())
+            
+        # Save Model
+        self.register(self.wbp.get_info())
+
+    def save_model(self):
+        """
+        Saves the model given its type
+        """
+
+        if self.model_type == 'lgbm':
+            self.model.save_model(f"{self.output_dir}/{self.model_name}/model.txt")
+
+
+    def evaluate(self, wbp):
         """
         Runs an evaluation of a model (suite of metrics)
         Only gets called if in Train mode
         """
+        pred = self.predict(wbp.X)
+        eval_metrics = {}
 
-    def predict(self, X):
+        eval_metrics['acc'] = accuracy_score(y, pred)
+        eval_metrics['acc'] = precision_score(y, pred)
+        eval_metrics['acc'] = recall_score(y, pred)
+
+        return eval_metrics
+
+    def predict(self, wbp):
         """
         Generate scores for a feature set
         """
 
-    
+        if self.model_type == 'lgbm':
+            return self.model.predict(wbp.as_lgbm(targets=False))
 
+    def register(self, pipeline_info):
+        """
+        Saves a trained model and pipeline
+        """
 
+        # Save Model
+        self.save_model()
+
+        config = {
+            'model_type':self.model_type,
+            'parameters':self.hyper_params,
+            'model_name':model_name,
+        }
+        config.update(pipeline_info)
+
+        # Save metadata
+        with f"{self.output_dir}/{model_name}/model_meta.json" as f:
+            json.dump(config, f)
+        
