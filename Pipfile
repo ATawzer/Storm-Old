@@ -18,6 +18,7 @@ sqlalchemy = "*"
 pymysql = "*"
 cryptography = "*"
 lightgbm = "*"
+shortuuid = "*"
 
 [dev-packages]
 
