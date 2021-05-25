@@ -17,71 +17,19 @@ load_dotenv()
 # Internal
 from .db import *
 
-class WeatherBoy:
-    """
-    Endpoint prediction, leverages pre-trained models.
-    Loads a model using a configuration_id.
-    If it doesn't know one it will default to that storm's best guess.
-
-    WeatherMan can control models and pipelines after instantiation separately
-    for rapid experiementation but on production runs it will run
-    the entirety of the process.
-    """
-
-    def __init__(self, tracks, storm_name, weather_boy_config_id=None, verbocity=3):
-
-        self.storm = storm_name
-        self.cfg_id = weather_boy_config_id
-        self.tracks = tracks
-        self.scores = {track:0 for track in tracks}
-
-        # To be loaded
-        self.model_cfg = {}
-        self.pipeline_cfg = {}
-
-        # Load
-        self.load_config(weather_boy_config_id)
-
-        # pipeline
-        self.pipeline = WeatherBoyPipeline(tracks, self.pipeline_cfg, verbocity=verbocity-1)
-        self.pipeline.load()
-
-        # model
-        self.model = WeatherBoyModel(self.model_cfg, verbocity=verbocity-1)
-        self.model.load()
-
-    def load_config(self):
-        """
-        Loads the model and pipeline configurations from the SDB.
-        """
-
-        cfg = self.sdb.get_wb_config(self.cfg_id)
-        self.pipeline_cfg, self.model_cfg = cfg['pipeline'], cfg['model']
-
-    def get_scores(self):
-        """
-        Given a loaded model and pipeline, get the prediction scores per track.
-        """
-    
-        self.scores = self.model.Predict(self.pipeline['X']) # returns in dict format
-
-
-    def rank_order():
-
-        return False
-
 class WeatherBoyPipeline:
     """
     Sources the feautures and targets for a set of tracks.
     Needs a pipline configuration
     """
-    def __init__(self, tracks, storm_name, verbocity=2, train=False):
+    def __init__(self, tracks, storm_name, features={}, verbocity=2, train=False):
 
         self.X = pd.DataFrame()
         self.y = [] if train else None
         self.storm_name = storm_name
         self.tracks = tracks
         self.train = train
+        self.features = features # MongoDB style
 
         # Database connection
         self.sdb = StormDB()
@@ -120,13 +68,13 @@ class WeatherBoyPipeline:
         - artists (feature engineering at artist level)
         """
 
-        self.X = pd.DataFrame(self.sdb.get_track_info(self.tracks))
+        self.X = pd.DataFrame(self.sdb.get_track_info(self.tracks, self.features))
 
     def load_y(self):
         """
         Looks for track membership in the good targets for the given tracks.
         """
-        target_playlist_id = self.sdb.get_config(self.cfg['storm_name'])['good_targets']
+        target_playlist_id = self.sdb.get_config(self.storm_name)['good_targets']
         target_tracks = self.sdb.get_loaded_playlist_tracks(target_playlist_id)
         self.y = [1 if track in target_tracks else 0 for track in self.tracks]
 
