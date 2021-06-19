@@ -14,6 +14,9 @@ import joblib
 from dotenv import load_dotenv
 load_dotenv() 
 
+# Directory writing
+import os
+
 # Internal
 from .db import *
 
@@ -55,7 +58,7 @@ class WeatherBoyPipeline:
         This is ready to feed directly in
         """
         if targets:
-            return Dataset(self.X, label=self.y, **kwargs)
+            return self.X.values, self.y
         else:
             return Dataset(self.X)
 
@@ -88,7 +91,6 @@ class WeatherBoyPipeline:
             'features':self.X.columns
         }
 
-
 class WeatherBoyModel:
     """
     Trains weatherboy(s) given a pipeline configuration.
@@ -97,13 +99,15 @@ class WeatherBoyModel:
 
         self.is_fit = False
         self.output_dir = output_dir
+        self.model_type = model_type
+        self.hyper_params = hyper_params
+
         if model_name is None:
             self.model_name = f'{self.model_type}_{dt.datetime.now().strftime("%y%m%d")}_{shortuuid.ShortUUID().random(length=6)}'
         else:
             self.model_name = model_name
 
-        self.model_type = model_type
-        self.hyper_params = hyper_params
+        
 
         # Verbocity
         self.print = print if verbocity > 0 else lambda x: None
@@ -117,8 +121,8 @@ class WeatherBoyModel:
         """
 
         if self.model_type == 'lgbm':
-            if os.path.exists(f"{self.output_dir}/{self.model_name}/model.txt"):
-                self.model = LGBMClassifier().fit(init_model=f"{self.output_dir}/{self.model_name}/model.txt")
+            if os.path.exists(f"{self.output_dir}/{self.model_name}.mdl"):
+                self.model = joblib.load(f"{self.output_dir}/{self.model_name}.mdl")
                 self.is_fit = True
             else:
                 raise FileNotFoundError(f"{self.model_name} not found.")
@@ -133,10 +137,10 @@ class WeatherBoyModel:
 
         if self.model_type == 'lgbm':
             self.model = LGBMClassifier(**self.hyper_params)
-            self.model.fit(wbp.as_lgbm())
+            self.model.fit(*wbp.as_lgbm(), verbose=1)
             
         # Save Model
-        self.register(self.wbp.get_info())
+        self.register(wbp.get_info())
 
     def save_model(self):
         """
@@ -144,7 +148,7 @@ class WeatherBoyModel:
         """
 
         if self.model_type == 'lgbm':
-            self.model.save_model(f"{self.output_dir}/{self.model_name}/model.txt")
+            joblib.dump(self.model, f"{self.output_dir}/{self.model_name}.mdl")
 
 
     def evaluate(self, wbp):
@@ -180,11 +184,12 @@ class WeatherBoyModel:
         config = {
             'model_type':self.model_type,
             'parameters':self.hyper_params,
-            'model_name':model_name,
+            'model_name':self.model_name,
         }
         config.update(pipeline_info)
 
         # Save metadata
-        with f"{self.output_dir}/{model_name}/model_meta.json" as f:
+        with f"{self.output_dir}/{self.model_name}_meta.json" as f:
             json.dump(config, f)
         
+
