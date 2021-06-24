@@ -19,6 +19,8 @@ pymysql = "*"
 cryptography = "*"
 lightgbm = "*"
 shortuuid = "*"
+lazypredict = "*"
+scikit-learn = "*"
 
 [dev-packages]
 

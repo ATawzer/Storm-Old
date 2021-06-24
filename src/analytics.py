@@ -422,9 +422,7 @@ class StormAnalyticsController:
             pipeline['view_generation_pipeline'] = [('playlist_history', {"playlist_ids":[]}),
                                                     ('playlist_info', {"playlist_ids":[]}),
                                                     ('run_history', {"storm_names":[]}),
-                                                    ('track_info', {"tracks":[]}),
-                                                    ('storm_target_membership', {"target_group":'all'}),
-                                                    ('storm_run_membership', {})]
+                                                    ('track_info', {"tracks":[]})]
 
             # SADB -> SADB
             pipeline['view_aggregation_pipeline'] = []
