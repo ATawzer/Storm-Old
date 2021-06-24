@@ -36,6 +36,7 @@ class StormDB:
         self.albums = self.db['albums']
         self.storms = self.db['storm_metadata']
         self.tracks = self.db['tracks']
+        self.utracks = self.db['tracks_unique']
         self.playlists = self.db['playlists']
         self.runs = self.db['runs']
         self.blacklists = self.db['blacklists']
@@ -512,6 +513,48 @@ class StormDB:
                     for artist in album['artists']:
                         self.artists.update_one({"_id":artist}, {"$addToSet":{"albums":album["_id"]}}, upsert=True)
                     self.albums.update_one({"_id":album["_id"]}, {"$set":{"added_to_artists":True}})
+
+    def gen_unique_track_id(self, track_name, artists):
+        """
+        Consistent way to clean track names for database writing and id structure
+        """
+
+        bad_chars = ',. '
+        for char in bad_chars:
+            name = name.replace(char, '')
+        artist_string = "A&A".join(artists)
+        return name+"T&A"+artist_string
+
+    def dedup_tracks_on_name(self, updated_date='2021-01-01'):
+        """
+        Copies the track database to the tracks_unique database.
+        This database is dedicated to unique songs based on artist and name.
+        """
+
+        # Get tracks that need moving
+        q = {"last_updated":{"$gte":updated_date}}
+        cols = {"_id":1}
+        r = list(self.tracks.find(q, cols))
+
+        # Move them in batches
+        batch_size = 100
+        batches = np.array_split(r, int(np.ceil(len(r)/batch_size)))
+
+        for batch in tqdm(batches):
+
+            q = {"_id":{"$in":[x["_id"] for x in batch.tolist()]}}
+            cols = {"_id":0, "last_updated":0}
+            r = list(self.tracks.find(q, cols))
+
+            # Add track data to tracks
+            for track_record in r:
+                track_record['_id'] = self.gen_unique_track_id(track_record["name"], track_record['artists'])
+
+                q = {"_id":track_record["_id"]}
+                track_record['dedup_date'] = dt.datetime.now().strftime('%Y-%m-%d')
+                self.utracks.update_one(q, {"$set":track_record}, upsert=True)
+
+
 
 class StormAnalyticsDB:
     """
