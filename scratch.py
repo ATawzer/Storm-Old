@@ -17,6 +17,7 @@ from src.analytics import *
 from src.weatherboy import *
 from src.storm import Storm
 
+StormDB().dedup_tracks_on_name()
 
 Storm(['contemporary_lyrical', 'film_vg_instrumental']).Run()
 
