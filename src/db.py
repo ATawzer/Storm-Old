@@ -566,21 +566,21 @@ class StormDB:
                 track_record['dedup_date'] = dt.datetime.now().strftime('%Y-%m-%d')
                 self.utracks.update_one(q, {"$set":track_record}, upsert=True)
 
-    def gen_unique_run_tracks(self, unique_id_func):
+    def gen_unique_run_tracks(self):
         """
         More of a one-time function, but will convert storm tracks into unique storm tracks
-        using the unique id generator of choice
         """
 
         storms = self.get_all_configs()
         
         for storm in tqdm(storms):
             print(f"Adding uids for {storm}")
-            run = self.get_run_by_storm(storm)
+            runs = self.get_runs_by_storm(storm)
 
-            storm_tracks = self.get_track_info(run['storm_tracks'], {"_id":1, "name":1, "artists":1})
-            run['storm_tracks_uid'] = np.unique([unique_id_func(x['name'], x['artists']) for x in storm_tracks]).tolist()
-            self.update_run_record(run)
+            for run in runs:
+                storm_tracks = self.get_track_info(run['storm_tracks'], {"_id":1, "name":1, "artists":1})
+                run['storm_tracks_uid'] = np.unique([self.gen_unique_track_id(x['name'], x['artists']) for x in storm_tracks]).tolist()
+                self.update_run_record(run)
 
 
 class StormAnalyticsDB:
