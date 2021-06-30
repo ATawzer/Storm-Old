@@ -94,9 +94,20 @@ class StormDB:
 
     # Metadata Write Endpoints
     def write_run_record(self, run_record):
+        """
+        Adds new run record (for use after storm run)
+        """
 
         q = {}
         self.runs.insert_one(run_record)
+
+    def update_run_record(self, run_record):
+        """
+        Updates existing run record
+        """
+        q = {"_id":run_record["_id"]}
+        self.runs.update_one(q, {"$set":run_record})
+
 
     # Playlist Reading Endpoints
     def get_playlists(self, name=False):
@@ -548,14 +559,28 @@ class StormDB:
 
             # Add track data to tracks
             for track_record in r:
+                track_record['old_id'] = track_record['_id']
                 track_record['_id'] = self.gen_unique_track_id(track_record["name"], track_record['artists'])
 
                 q = {"_id":track_record["_id"]}
                 track_record['dedup_date'] = dt.datetime.now().strftime('%Y-%m-%d')
                 self.utracks.update_one(q, {"$set":track_record}, upsert=True)
 
-    #def gen_run_history(self)
+    def gen_unique_run_tracks(self, unique_id_func):
+        """
+        More of a one-time function, but will convert storm tracks into unique storm tracks
+        using the unique id generator of choice
+        """
 
+        storms = self.get_all_configs()
+        
+        for storm in tqdm(storms):
+            print(f"Adding uids for {storm}")
+            run = self.get_run_by_storm(storm)
+
+            storm_tracks = self.get_track_info(run['storm_tracks'], {"_id":1, "name":1, "artists":1})
+            run['storm_tracks_uid'] = np.unique([unique_id_func(x['name'], x['artists']) for x in storm_tracks]).tolist()
+            self.update_run_record(run)
 
 
 class StormAnalyticsDB:
