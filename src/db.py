@@ -536,20 +536,22 @@ class StormDB:
         artist_string = "A&A".join(artists)
         return track_name+"T&A"+artist_string
 
-    def dedup_tracks_on_name(self, updated_date='2021-01-01'):
+    def dedup_tracks_on_name(self, updated_date='2021-01-01', tracks=[]):
         """
         Copies the track database to the tracks_unique database.
         This database is dedicated to unique songs based on artist and name.
         """
 
-        # Get tracks that need moving
-        q = {"last_updated":{"$gte":updated_date}}
-        cols = {"_id":1}
-        r = list(self.tracks.find(q, cols))
+        # Get tracks that need moving if they weren't specified
+        if len(tracks) == 0:
+            q = {"last_updated":{"$gte":updated_date}}
+            cols = {"_id":1}
+            tracks = list(self.tracks.find(q, cols))
+
 
         # Move them in batches
         batch_size = 100
-        batches = np.array_split(r, int(np.ceil(len(r)/batch_size)))
+        batches = np.array_split(tracks, int(np.ceil(len(tracks)/batch_size)))
 
         for batch in tqdm(batches):
 
