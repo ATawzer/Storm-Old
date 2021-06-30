@@ -31,7 +31,7 @@ class Storm:
 
         self.print_initial_screen()
         self.storm_names = storm_names
-        self.sac = StormAnalyticsController()
+        #self.sac = StormAnalyticsController()
 
     def print_initial_screen(self):
 
@@ -45,7 +45,7 @@ class Storm:
             StormRunner(storm_name).Run()
 
         print("Done Runnings, rebuilding storm_analytics")
-        self.sac.analytics_pipeline()
+        #self.sac.analytics_pipeline()
         
 
 #Storm(['film_vg_instrumental', 'contemporary_lyrical']).Run()

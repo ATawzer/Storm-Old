@@ -521,9 +521,9 @@ class StormDB:
 
         bad_chars = ',. '
         for char in bad_chars:
-            name = name.replace(char, '')
+            track_name = track_name.replace(char, '')
         artist_string = "A&A".join(artists)
-        return name+"T&A"+artist_string
+        return track_name+"T&A"+artist_string
 
     def dedup_tracks_on_name(self, updated_date='2021-01-01'):
         """
@@ -553,6 +553,8 @@ class StormDB:
                 q = {"_id":track_record["_id"]}
                 track_record['dedup_date'] = dt.datetime.now().strftime('%Y-%m-%d')
                 self.utracks.update_one(q, {"$set":track_record}, upsert=True)
+
+    #def gen_run_history(self)
 
 
 
