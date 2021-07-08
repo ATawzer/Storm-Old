@@ -397,7 +397,7 @@ class StormRunner:
         """
         Output the tracks in storm_tracks
         """
-        self.suc.write_playlist_tracks(self.config['full_storm_delivery']['playlist'], self.run_record['storm_tracks'])
+        self.suc.write_playlist_tracks(self.config['full_storm_delivery']['playlist'], np.random.shuffle(self.run_record['storm_tracks']))
 
     def save_run_record(self):
         """
@@ -653,3 +653,28 @@ class StormRunner:
         self.run_record['removed_tracks'] = bad_tracks
         print(f"Starting Track Amount: {len(self.run_record['eligible_tracks'])}")
         print(f"Ending Track Amount: {len(self.run_record['storm_tracks'])}")
+
+    def filter_rerelases(self, last_delivered_window=180):
+        """
+        Uses a track generated unique id (artists + title) and a start_date
+        to remove tracks that are most likely just re-released.
+
+        Notes:
+            - Typically remixes contain "remix" in title, they will still be included
+            - The time window allows for potential unique songs to be released later, especially
+            in film music. An entire album is not likely to be excluded
+            - There ia no guarantee an explicit or non-explicit version will be kept
+        """
+
+        # Convert storm tracks to their uids
+        storm_tracks = self.sdb.get_track_info(self.run_record['storm_tracks'], {"_id":1, 'name':1, 'artists':1})
+        self.run_record['storm_tracks_uid'] = ['' for x in range(storm_tracks)]
+
+        for i, track in enumerate(storm_tracks):
+
+            self.run_record[i] = self.sdb.gen_unique_track_id(track['name'], track['artists'])
+
+        # Dedup
+        self.run_record['storm_tracks_uid'] = np.unique(self.run_record['storm_tracks_uid']).tolist()
+
+        # Get a list of all the previous delivered storm tracks
