@@ -385,6 +385,9 @@ class StormRunner:
         print("Filtering Tracks.")
         self.apply_track_filters()
 
+        print("Handling Duplicates and Previously Delivered.")
+        self.filter_rerelases()
+
         print("Storm Tracks Generated! \n")
 
     def call_weatherboy(self):
@@ -654,7 +657,7 @@ class StormRunner:
         print(f"Starting Track Amount: {len(self.run_record['eligible_tracks'])}")
         print(f"Ending Track Amount: {len(self.run_record['storm_tracks'])}")
 
-    def filter_rerelases(self, last_delivered_window=180):
+    def filter_rerelases(self, last_delivered_window=60):
         """
         Uses a track generated unique id (artists + title) and a start_date
         to remove tracks that are most likely just re-released.
@@ -667,14 +670,25 @@ class StormRunner:
         """
 
         # Convert storm tracks to their uids
+        print(f"Starting Storm Track Amount: {len(self.run_record['storm_tracks'])}")
         storm_tracks = self.sdb.get_track_info(self.run_record['storm_tracks'], {"_id":1, 'name':1, 'artists':1})
-        self.run_record['storm_tracks_uid'] = ['' for x in range(storm_tracks)]
-
-        for i, track in enumerate(storm_tracks):
-
-            self.run_record[i] = self.sdb.gen_unique_track_id(track['name'], track['artists'])
-
-        # Dedup
-        self.run_record['storm_tracks_uid'] = np.unique(self.run_record['storm_tracks_uid']).tolist()
+        storm_track_df = pd.DataFrame({'track_ids':storm_tracks})
+        storm_track_df['track_uids'] = storm_track_df['track_ids'].apply(lambda x: self.sdb.gen_unique_track_id(x['name'], x['artists']))
+        self.run_record['storm_tracks_uid'] = storm_track_df['track_uids'].unique()
 
         # Get a list of all the previous delivered storm tracks
+        runs = self.sdb.get_runs_by_storm(self.name)
+        window_date = (dt.datetime.now() - dt.timedelta(days=last_delivered_window)).strftime('%Y-%m-%d')
+        valid_runs = [x for x in runs if x['last_updated'] > window_date]
+
+        delivered_tracks = []
+        for run in valid_runs:
+            delivered_tracks.extend(run['storm_tracks_uid'])
+        delivered_tracks = np.unique(delivered_tracks).tolist()
+
+        # Remove previously delivered tracks
+        storm_track_df = storm_track_df[~storm_track_df.track_uids.isin(delivered_tracks)]
+
+        # Save off the unique track ids (dedupped on their unique name)
+        self.run_record['storm_tracks'] = storm_track_df.drop_duplicates('track_uids').track_ids.tolist()
+        print(f"Ending Storm Track Amount: {len(self.run_record['storm_tracks'])}")
