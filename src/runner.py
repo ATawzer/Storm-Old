@@ -400,7 +400,10 @@ class StormRunner:
         """
         Output the tracks in storm_tracks
         """
-        self.suc.write_playlist_tracks(self.config['full_storm_delivery']['playlist'], np.random.shuffle(self.run_record['storm_tracks']))
+        # Shuffling for delivery
+        np.random.shuffle(self.run_record['storm_tracks'])
+
+        self.suc.write_playlist_tracks(self.config['full_storm_delivery']['playlist'], self.run_record['storm_tracks'])
 
     def save_run_record(self):
         """
@@ -673,13 +676,13 @@ class StormRunner:
         print(f"Starting Storm Track Amount: {len(self.run_record['storm_tracks'])}")
         storm_tracks = self.sdb.get_track_info(self.run_record['storm_tracks'], {"_id":1, 'name':1, 'artists':1})
         storm_track_df = pd.DataFrame(storm_tracks)
-        storm_track_df['track_uids'] = storm_track_df.apply(lambda x: self.sdb.gen_unique_track_id(x['name'], x['artists']))
+        storm_track_df['track_uids'] = storm_track_df.apply(lambda x: self.sdb.gen_unique_track_id(x['name'], x['artists']), axis=1)
         self.run_record['storm_tracks_uid'] = storm_track_df['track_uids'].unique()
 
         # Get a list of all the previous delivered storm tracks
         runs = self.sdb.get_runs_by_storm(self.name)
         window_date = (dt.datetime.now() - dt.timedelta(days=last_delivered_window)).strftime('%Y-%m-%d')
-        valid_runs = [x for x in runs if x['last_updated'] > window_date]
+        valid_runs = [x for x in runs if x['run_date'] > window_date]
 
         delivered_tracks = []
         for run in valid_runs:
@@ -690,6 +693,6 @@ class StormRunner:
         storm_track_df = storm_track_df[~storm_track_df.track_uids.isin(delivered_tracks)]
 
         # Save off the unique track ids (dedupped on their unique name)
-        self.run_record['storm_tracks'] = storm_track_df.drop_duplicates('track_uids').track_ids.tolist()
-        self.run_record['storm_tracks_uid'] = storm_track_df['track_uids'].unique()
+        self.run_record['storm_tracks'] = storm_track_df.drop_duplicates('track_uids')._id.tolist()
+        self.run_record['storm_tracks_uid'] = storm_track_df['track_uids'].unique().tolist()
         print(f"Ending Storm Track Amount: {len(self.run_record['storm_tracks'])}")
