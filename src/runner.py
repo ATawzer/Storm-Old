@@ -683,6 +683,7 @@ class StormRunner:
         runs = self.sdb.get_runs_by_storm(self.name)
         window_date = (dt.datetime.now() - dt.timedelta(days=last_delivered_window)).strftime('%Y-%m-%d')
         valid_runs = [x for x in runs if x['run_date'] > window_date]
+        print(f"Tracks remaining after dedup: {len(storm_track_df.drop_duplicates('track_uids')._id.tolist())}")
 
         delivered_tracks = []
         for run in valid_runs:
