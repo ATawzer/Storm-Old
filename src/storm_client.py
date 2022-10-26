@@ -285,7 +285,7 @@ class StormClient:
 
         return result
 
-    def get_track_features(self, tracks: List) -> Dict:
+    def get_track_features(self, tracks: List) -> List[Dict]:
         """
         Returns a tracks info and audio features
         """
@@ -298,29 +298,48 @@ class StormClient:
             "key",
             "loudness",
             "mode",
+            "mode_confidence",
             "speechiness",
             "acousticness",
             "instrumentalness",
             "liveness",
             "valence",
             "tempo",
+            "tempo_confidence"
             "time_signature",
+            "time_signature_confidence",
+            ""
         ]
         batches = np.array_split(tracks, int(np.ceil(len(tracks) / id_lim)))
 
         # Get track features in batches
         result = []
-        for batch in tqdm(batches):
+        for batch in batches:
             self._authenticate()
             response = self.sp.audio_features(batch)
             result.extend([{k: x[k] for k in keys} for x in response if x is not None])
 
-        # Filter to just ids
         return result
 
-    def get_track_audio_analysis(self, tracks:List) -> Dict:
+    def get_track_audio_analysis(self, tracks:List) -> List[Dict]:
         """
         Gets the detailed audio analysis for a track
         """
 
-        pass
+        # Call Info
+        id_lim = 50
+        batches = np.array_split(tracks, int(np.ceil(len(tracks) / id_lim)))
+        num_batches = len(batches)
+        keys = ['sections', 'segments']
+
+        # Get track features in batches
+        result = []
+        for j, batch in enumerate(batches):
+            for i, track in enumerate(batch):
+                l.debug(f"Acquiring Audio Analysis for {track}, number {i}/{id_lim} | {j+1}/{num_batches}")
+                self._authenticate()
+                response = {'id':track}
+                response['audio_analysis'] = {k:v for k, v in self.sp.audio_analysis(track).items() if k in keys}
+                result.extend([response])
+
+        return result

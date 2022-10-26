@@ -415,6 +415,7 @@ class StormDB:
         """
         Get all tracks that need audio features added.
         """
+
         q = {}
         cols = {"_id": 1, "audio_features": 1}
         r = list(self._tracks.find(q, cols))
@@ -426,6 +427,25 @@ class StormDB:
                 result.append(track["_id"])
             else:
                 if not track["audio_features"]:
+                    result.append(track["_id"])
+        return result
+
+    def get_tracks_for_audio_analysis(self) -> List[str]:
+        """
+        Get all tracks that need audio analysis added.
+        """
+        
+        q = {}
+        cols = {"_id": 1, "audio_analysis": 1, "audio_analysis_flag": 1}
+        r = list(self._tracks.find(q, cols))
+
+        # Only append artists who need collection in result
+        result = []
+        for track in r:
+            if "audio_analysis" not in track.keys():
+                result.append(track["_id"])
+            else:
+                if not track["audio_analysis_flag"]:
                     result.append(track["_id"])
         return result
 
@@ -497,7 +517,7 @@ class StormDB:
             del track["id"]
             self._tracks.update_one(q, {"$set": track}, upsert=True)
 
-    def update_track_features(self, tracks: List[str]) -> None:
+    def update_track_features(self, tracks: List[Dict]) -> None:
         """
         Updates a track's record with audio features
         """
@@ -506,6 +526,20 @@ class StormDB:
 
             # Writing updates (formatting changes)
             track["audio_features"] = True
+            track["last_updated"] = dt.datetime.now().strftime("%Y-%m-%d")
+            del track["id"]
+
+            self._tracks.update_one(q, {"$set": track}, upsert=True)
+
+    def update_track_analysis(self, tracks: List[Dict]) -> None:
+        """
+        Updates a track's record with audio features
+        """
+        for track in tracks:
+            q = {"_id": track["id"]}
+
+            # Writing updates (formatting changes)
+            track["audio_analysis_flag"] = True
             track["last_updated"] = dt.datetime.now().strftime("%Y-%m-%d")
             del track["id"]
 
