@@ -12,13 +12,174 @@ import json
 # DB
 from .db import *
 from .storm_client import *
+from .weatherboy import *
 from pymongo import MongoClient
+
+class FakeRunner:
+    """
+    Orchestrates a non-recorded, no API storm run given start and end_dates.
+    Returns the hypothetical run_record gathered from taking the most recent run from
+    that storms artists
+    """
+    def __init__(self, storm_name, start_date, run_date, verbocity=1):
+
+        print(f"Initializing Runner for {storm_name}")
+        self.sdb = StormDB()
+        self.config = self.sdb.get_config(storm_name)
+        self.name = storm_name
+        self.start_date = start_date
+        self.run_date = run_date
+
+        # Verbocity
+        self.print = print if verbocity > 0 else lambda x: None
+        self.tqdm = lambda x: tqdm(x, leave=False) if verbocity > 1 else lambda x: x
+
+        # metadata
+        self.run_record = {'config':self.config, 
+                           'storm_name':self.name,
+                           'run_date':self.run_date,
+                           'start_date':self.start_date,
+                           'input_artists':[], # Determines what gets collected, also 'egligible' artists
+                           'eligible_tracks':[], # Tracks that could be delivered before track filters
+                           'storm_tracks':[], # Tracks actually written out
+                           'storm_artists':[], # Used for track filtering
+                           'storm_albums':[], # Release Date Filter
+                           'storm_sample_tracks':[], # subset of storm tracks delivered to sample
+                           'removed_artists':[] # Artists filtered out
+                           }
+
+        self.print(f"{self.name} Started Successfully!\n")
+        #self.Run()
+
+    def Run(self):
+        """
+        Storm Orchestration based on a configuration.
+        """
+
+        self.print(f"{self.name} - Step 1 / 2 - Getting Storm Artists from most recent run . . .")
+        self.load_last_run()
+
+        self.print(f"{self.name} - Step 2 / 2 - Filtering Track List . . . ")
+        self.filter_storm_tracks()
+
+        self.print(f"{self.name} - Complete!\n")
+        return self.run_record
+    
+    def load_last_run(self):
+        """
+        Loads in relevant information from last run.
+        """
+        self.print("Appending last runs tracks and artists.")
+        self.run_record['input_artists'].extend(self.sdb.get_last_run(self.name)['storm_artists']) # Post-filter
+
+    def filter_storm_tracks(self):
+        """
+        Get a List of tracks to deliver.
+        """
+
+        self.print("Filtering artists.")
+        self.apply_artist_filters()
+
+        self.print("Obtaining all albums from storm artists.")
+        self.run_record['storm_albums'] = self.sdb.get_albums_from_artists_by_date(self.run_record['storm_artists'], 
+                                                                                   self.run_record['start_date'],
+                                                                                   self.run_date)
+        self.print("Getting tracks from albums.")
+        self.run_record['eligible_tracks'] = self.sdb.get_tracks_from_albums(self.run_record['storm_albums'])
+
+        self.print("Filtering Tracks.")
+        self.apply_track_filters()
+
+        self.print("Storm Tracks Generated! \n")
+
+    def apply_artist_filters(self):
+        """
+        read in filters from configurations
+        """
+        filters = self.config['filters']['artist']
+        supported = ['genre', 'blacklist']
+        bad_artists = []
+
+        # Filters
+        self.print(f"{len(filters)} valid filters to apply")
+        for filter_name, filter_value in filters.items():
+            
+            self.print(f"Attemping filter {filter_name} - {filter_value}")
+            if filter_name == 'genre':
+                # Add all known artists in sdb of a genre to remove in tracks later
+                genre_artists = self.sdb.get_artists_by_genres(filter_value)
+                bad_artists.extend(genre_artists)
+
+            elif filter_name == 'blacklist':
+                blacklist = self.sdb.get_blacklist(filter_value)
+                if len(blacklist) == 0:
+                    self.print(f"{filter_value} not found, no filtering will be done.'")
+                else:
+                    bad_artists.extend(blacklist[0]['blacklist'])
+            else:
+                self.print(f"{filter_name} not supported or misspelled. ")
+
+        self.run_record['storm_artists'] = [x for x in self.run_record['input_artists'] if x not in bad_artists]
+        self.run_record['removed_artists'] = bad_artists
+        self.print(f"Starting Artist Amount: {len(self.run_record['input_artists'])}")
+        self.print(f"Ending Artist Amount: {len(self.run_record['storm_artists'])}")
+
+    def apply_track_filters(self):
+        """
+        read in filters from configurations
+        """
+        filters = self.config['filters']['track']
+        supported = ['audio_features', 'artist_filter']
+        bad_tracks = []
+
+        # Filters
+        self.print(f"{len(filters)} valid filters to apply")
+        for filter_name, filter_value in filters.items():
+            
+            self.print(f"Attemping filter {filter_name} - {filter_value}")
+            if filter_name == 'audio_features':
+                for feature, feature_value in filter_value.items():
+                    op = f"${feature_value.split('&&')[0]}"
+                    val = float(feature_value.split('&&')[1])
+                    self.print(f"Removing tracks with {feature} - {op}:{val}")
+                    valid = self.sdb.filter_tracks_by_audio_feature(self.run_record['eligible_tracks'], {feature:{op:val}})
+                    bad_tracks.extend([x for x in self.run_record['eligible_tracks'] if x not in valid])
+                    self.print(f"Cumulative Bad Tracks found {len(np.unique(bad_tracks))}")
+
+                
+            elif filter_name == "artist_filter":
+                if filter_value == 'hard':
+                    # Limits output to tracks that contain only storm artists
+                    for track in tqdm(self.run_record['eligible_tracks']):
+
+                        track_artists = set(self.sdb.get_track_artists(track))
+                        if not track_artists.issubset(set(self.run_record['storm_artists'])):
+                            bad_tracks.append(track)
+
+                elif filter_value == 'soft':
+                    # Removes tracks that contain known filtered out artists
+                    # Other 'bad' artists could sneak in if not tracked by storm
+                    for track in tqdm(self.run_record['eligible_tracks']):
+                        track_artists = set(self.sdb.get_track_artists(track))
+                        if not set(self.run_record['removed_artists']).isdisjoint(track_artists):
+                            bad_tracks.append(track)
+
+            else:
+                self.print(f"{filter_name} not supported or misspelled. ")
+
+        bad_tracks = np.unique(bad_tracks).tolist()
+        self.print("Removing bad tracks . . .")
+        self.run_record['storm_tracks'] = [x for x in self.run_record['eligible_tracks'] if x not in bad_tracks]
+        self.run_record['removed_tracks'] = bad_tracks
+        self.print(f"Starting Track Amount: {len(self.run_record['eligible_tracks'])}")
+        self.print(f"Ending Track Amount: {len(self.run_record['storm_tracks'])}")
+
 
 class StormRunner:
     """
     Orchestrates a storm run
     """
-    def __init__(self, storm_name, start_date=None):
+    def __init__(self, storm_name, start_date=None, ignore_rerelease=True):
 
         print(f"Initializing Runner for {storm_name}")
         self.sdb = StormDB()
@@ -27,6 +188,8 @@ class StormRunner:
         self.suc = StormUserClient(self.config['user_id'])
         self.name = storm_name
         self.start_date = start_date
+        self.wb = WeatherBoy(self.sdb)
+        self.ignore_rerelease = ignore_rerelease
 
         # metadata
         self.run_date = dt.datetime.now().strftime('%Y-%m-%d')
@@ -225,18 +388,24 @@ class StormRunner:
         print("Filtering Tracks.")
         self.apply_track_filters()
 
+        if self.ignore_rerelease:
+            print("Handling Duplicates and Previously Delivered.")
+            self.filter_rereleases()
+
         print("Storm Tracks Generated! \n")
 
     def call_weatherboy(self):
         """
         Run Modeling process
         """
-        return None
+
+        self.run_record['storm_tracks'] = self.wb.rank_tracks(self.run_record['storm_tracks'], self.config['good_targets'], self.config['great_targets'])
 
     def write_storm_tracks(self):
         """
         Output the tracks in storm_tracks
         """
+
         self.suc.write_playlist_tracks(self.config['full_storm_delivery']['playlist'], self.run_record['storm_tracks'])
 
     def save_run_record(self):
@@ -254,7 +423,8 @@ class StormRunner:
 
         if self.last_run is not None:
             if 'run_date' in self.last_run.keys():
-                self.start_date = self.last_run['run_date']
+                #last_run_date = dt.strptime(self.last_run['run_date'], "%Y-%m-%d")
+                self.start_date = self.last_run['run_date'] if self.start_date is None else self.start_date
                 self.run_record['start_date'] = self.start_date
         
         if self.start_date is None:
@@ -492,3 +662,47 @@ class StormRunner:
         self.run_record['removed_tracks'] = bad_tracks
         print(f"Starting Track Amount: {len(self.run_record['eligible_tracks'])}")
         print(f"Ending Track Amount: {len(self.run_record['storm_tracks'])}")
+
+    def filter_rereleases(self, last_delivered_window=60):
+        """
+        Uses a track generated unique id (artists + title) and a start_date
+        to remove tracks that are most likely just re-released.
+
+        Notes:
+            - Typically remixes contain "remix" in title, they will still be included
+            - The time window allows for potential unique songs to be released later, especially
+            in film music. An entire album is not likely to be excluded
+            - There ia no guarantee an explicit or non-explicit version will be kept
+        """
+
+        # Convert storm tracks to their uids
+        print(f"Starting Storm Track Amount: {len(self.run_record['storm_tracks'])}")
+        storm_tracks = self.sdb.get_track_info(self.run_record['storm_tracks'], {"_id":1, 'name':1, 'artists':1})
+        storm_track_df = pd.DataFrame(storm_tracks)
+        storm_track_df['track_uids'] = storm_track_df.apply(lambda x: self.sdb.gen_unique_track_id(x['name'], x['artists']), axis=1)
+        self.run_record['storm_tracks_uid'] = storm_track_df['track_uids'].unique()
+
+        # Get a list of all the previous delivered storm tracks
+        runs = self.sdb.get_runs_by_storm(self.name)
+        window_date = (dt.datetime.now() - dt.timedelta(days=last_delivered_window)).strftime('%Y-%m-%d')
+
+        if runs is not None:
+            valid_runs = [x for x in runs if x['run_date'] > window_date]
+            print(f"Tracks remaining after dedup: {len(storm_track_df.drop_duplicates('track_uids')._id.tolist())}")
+
+            delivered_tracks = []
+            for run in valid_runs:
+
+                # Not every run generates unique keys, bug will be fixed later
+                if 'storm_tracks_uid' in run.keys():
+                    delivered_tracks.extend(run['storm_tracks_uid'])
+                    
+            delivered_tracks = np.unique(delivered_tracks).tolist()
+
+            # Remove previously delivered tracks
+            storm_track_df = storm_track_df[~storm_track_df.track_uids.isin(delivered_tracks)]
+
+        # Save off the unique track ids (dedupped on their unique name)
+        self.run_record['storm_tracks'] = storm_track_df.drop_duplicates('track_uids')._id.tolist()
+        self.run_record['storm_tracks_uid'] = storm_track_df['track_uids'].unique().tolist()
+        print(f"Ending Storm Track Amount: {len(self.run_record['storm_tracks'])}")
