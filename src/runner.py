@@ -3,7 +3,6 @@ from spotipy import util
 from spotipy import oauth2
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
 import os
 import datetime as dt
 import time
@@ -31,8 +30,7 @@ class FakeRunner:
         self.run_date = run_date
 
         # Verbocity
-        self.print = print if verbocity > 0 else lambda x: None
-        self.tqdm = lambda x: tqdm(x, leave=False) if verbocity > 1 else lambda x: x
+        self.print = l.debug
 
         # metadata
         self.run_record = {'config':self.config, 
@@ -150,7 +148,7 @@ class FakeRunner:
             elif filter_name == "artist_filter":
                 if filter_value == 'hard':
                     # Limits output to tracks that contain only storm artists
-                    for track in tqdm(self.run_record['eligible_tracks']):
+                    for track in self.run_record['eligible_tracks']:
 
                         track_artists = set(self.sdb.get_track_artists(track))
                         if not track_artists.issubset(set(self.run_record['storm_artists'])):
@@ -159,7 +157,7 @@ class FakeRunner:
                 elif filter_value == 'soft':
                     # Removes tracks that contain known filtered out artists
                     # Other 'bad' artists could sneak in if not tracked by storm
-                    for track in tqdm(self.run_record['eligible_tracks']):
+                    for track in self.run_record['eligible_tracks']:
                         track_artists = set(self.sdb.get_track_artists(track))
                         if not set(self.run_record['removed_artists']).isdisjoint(track_artists):
                             bad_tracks.append(track)
@@ -344,9 +342,11 @@ class StormRunner:
 
             bad_batches = []
             consecutive_bad_batches = 0
-            l.debug(f"Batch Size: {batch_size} | Number of Batches {len(batches)}")
-            for batch in tqdm(batches):
+            num_batches = len(batches)
+            l.debug(f"Batch Size: {batch_size} | Number of Batches {num_batches}")
+            for i, batch in enumerate(batches):
 
+                l.debug(f"Current Outer Batch: {i}/{num_batches}")
                 if consecutive_bad_batches > consecutive_bad_batches_limit:
                     raise Exception(f"{consecutive_bad_batches_limit} consecutive bad batches. . . Terminating Process.")
                 try:
@@ -495,8 +495,9 @@ class StormRunner:
         batches = np.array_split(artists, int(np.ceil(len(artists)/batch_size)))
 
         l.debug(f"Batch Size: {batch_size} | Number of Batches {len(batches)}")
-        for batch in tqdm(batches):
+        for i, batch in enumerate(batches):
 
+            l.debug(f"Current Batch: {i} / {len(batches)}")
             batch_albums = self.sc.get_artist_albums(batch)
             self.sdb.update_albums(batch_albums)
             self.sdb.update_artist_album_collected_date(batch)
@@ -534,6 +535,7 @@ class StormRunner:
             return True
 
         batches = np.array_split(needs_collection, int(np.ceil(len(needs_collection)/batch_size)))
+        num_batches = len(batches)
 
         # Attempt to go get the batches
         bad_batch_retries = 0
@@ -543,8 +545,10 @@ class StormRunner:
 
             bad_batches = []
             consecutive_bad_batches = 0
-            l.debug(f"Batch Size: {batch_size} | Number of Batches {len(batches)}")
-            for batch in tqdm(batches):
+            l.debug(f"Batch Size: {batch_size} | Number of Batches {num_batches}")
+            for i, batch in enumerate(batches):
+
+                l.debug(f"Current Outer Batch: {i}/{num_batches}")
 
                 if consecutive_bad_batches > consecutive_bad_batches_limit:
                     raise Exception(f"{consecutive_bad_batches_limit} consecutive bad batches. . . Terminating Process.")
@@ -625,7 +629,7 @@ class StormRunner:
         l.debug(f"{len(filters)} valid filters to apply")
         for filter_name, filter_value in filters.items():
             
-            l.debug(f"Attemping filter {filter_name} - {filter_value}")
+            l.debug(f"Attemping filter {filter_name} - {filter_value} on {len(self.run_record['eligible_tracks'])} Tracks.")
             if filter_name == 'audio_features':
                 for feature, feature_value in filter_value.items():
                     op = f"${feature_value.split('&&')[0]}"
@@ -639,7 +643,7 @@ class StormRunner:
             elif filter_name == "artist_filter":
                 if filter_value == 'hard':
                     # Limits output to tracks that contain only storm artists
-                    for track in tqdm(self.run_record['eligible_tracks']):
+                    for track in self.run_record['eligible_tracks']:
 
                         track_artists = set(self.sdb.get_track_artists(track))
                         if not track_artists.issubset(set(self.run_record['storm_artists'])):
@@ -648,7 +652,7 @@ class StormRunner:
                 elif filter_value == 'soft':
                     # Removes tracks that contain known filtered out artists
                     # Other 'bad' artists could sneak in if not tracked by storm
-                    for track in tqdm(self.run_record['eligible_tracks']):
+                    for track in self.run_record['eligible_tracks']:
                         track_artists = set(self.sdb.get_track_artists(track))
                         if not set(self.run_record['removed_artists']).isdisjoint(track_artists):
                             bad_tracks.append(track)
