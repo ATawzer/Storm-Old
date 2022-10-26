@@ -311,10 +311,13 @@ class StormClient:
             ""
         ]
         batches = np.array_split(tracks, int(np.ceil(len(tracks) / id_lim)))
+        num_batches = len(batches)
 
         # Get track features in batches
         result = []
-        for batch in batches:
+        for j, batch in enumerate(batches):
+            l.debug(f"Acquiring Audio Features for {id_lim} tracks, batch {j+1}/{num_batches}")
+
             self._authenticate()
             response = self.sp.audio_features(batch)
             result.extend([{k: x[k] for k in keys} for x in response if x is not None])
@@ -335,8 +338,10 @@ class StormClient:
         # Get track features in batches
         result = []
         for j, batch in enumerate(batches):
+
+            l.debug(f"Acquiring Audio Analysis for{id_lim} tracks, batch {j+1}/{num_batches}")
+            
             for i, track in enumerate(batch):
-                l.debug(f"Acquiring Audio Analysis for {track}, number {i}/{id_lim} | {j+1}/{num_batches}")
                 self._authenticate()
                 response = {'id':track}
                 response['audio_analysis'] = {k:v for k, v in self.sp.audio_analysis(track).items() if k in keys}

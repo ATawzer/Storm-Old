@@ -27,9 +27,9 @@ sc = StormClient(1241528689)
 tracks = sdb.get_tracks_for_audio_analysis()
 num_tracks = len(tracks)
 
-batches = np.array_split(tracks, int(np.ceil(num_tracks / 5000)))
+batches = np.array_split(tracks, int(np.ceil(num_tracks / 100)))
 for i, batch in enumerate(batches):
 
-    l.debug(f"Collecting Tracks {i*5000} - {(i+1)*5000} of {num_tracks}")
+    l.debug(f"Collecting Tracks {i*100} - {(i+1)*100} of {num_tracks}")
     featurized_tracks = sc.get_track_audio_analysis(batch)
     sdb.update_track_analysis(featurized_tracks)
