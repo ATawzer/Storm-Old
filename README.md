@@ -36,8 +36,7 @@ To get started, you will need:
 - Spotify User ID
 - Spotify Web API accesss (client and secret id)
 - MongoDB database the storm can write to and from (local is fine)
-- MySQL database for analytics and ML (local is fine)
-- A specific Spotify playlist structure (for now, until it gets automated with a configurator or frontend)
+- A specific Spotify playlist structure
 
 Most of this information lives inside your own .env file that will be loaded when using. See class definitions for the exact information you will need.
 
@@ -52,8 +51,7 @@ Storm uses pipenv. Simply run pipenv install inside this repo and all dependenci
 ## 1. Future Improvement
 - Detailing setup
 - Allowing for non-database runs (in case you don't want a backend or ML)
-- automatic playlist creation when making a new storm (via a configurator class)
-- disabling of MySQL component for database-less ML (risky)
+- automatic playlist creation when making a new storm
 
 ## 2. Known Issues / Fixes
 - 
@@ -62,5 +60,5 @@ Storm uses pipenv. Simply run pipenv install inside this repo and all dependenci
 - Spotify Web API: https://developer.spotify.com/documentation/web-api/
 - Spotipy documentation: https://spotipy.readthedocs.io/en/2.16.1/
 
-Feel free to reach out if you would like to start using this code. It's not exactly user-friendly right now.
+Feel free to reach out if you would like to start using this code.
 
