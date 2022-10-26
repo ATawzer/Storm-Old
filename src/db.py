@@ -48,7 +48,7 @@ class StormDB:
         self._blacklists = self.db["blacklists"]
 
     # Metadata Reading endpoints
-    def get_config(self, storm_name: str):
+    def get_config(self, storm_name: str) -> Dict:
         """
         returns a storm configuration given its name, assuming it exists.
         """
@@ -61,7 +61,7 @@ class StormDB:
         else:
             return r[0]["config"]
 
-    def get_all_configs(self):
+    def get_all_configs(self) -> List[Dict]:
         """
         Returns all configurations in DB.
         """
@@ -71,7 +71,7 @@ class StormDB:
 
         return [x["name"] for x in r]
 
-    def get_last_run(self, storm_name: str):
+    def get_last_run(self, storm_name: str) -> Dict:
         """
         returns the run_record from last storm run under a given name
         """
@@ -87,10 +87,11 @@ class StormDB:
             )
             return r[max_run_idx]
 
-    def get_runs_by_storm(self, storm_name: str):
+    def get_runs_by_storm(self, storm_name: str) -> List[Dict]:
         """
         Will Return all run records for a storm (and all fields)
         """
+
         q = {"storm_name": storm_name}
         cols = {"config": 0}
         r = list(self._runs.find(q, cols))
@@ -101,7 +102,7 @@ class StormDB:
             return r
 
     # Metadata Write Endpoints
-    def write_run_record(self, run_record: Dict):
+    def write_run_record(self, run_record: Dict) -> None:
         """
         Adds new run record (for use after storm run)
         """
@@ -109,7 +110,7 @@ class StormDB:
         q = {}
         self._runs.insert_one(run_record)
 
-    def update_run_record(self, run_record: Dict):
+    def update_run_record(self, run_record: Dict) -> None:
         """
         Updates existing run record
         """
@@ -117,7 +118,7 @@ class StormDB:
         self._runs.update_one(q, {"$set": run_record})
 
     # Playlist Reading Endpoints
-    def get_playlists(self, name: bool=False):
+    def get_playlists(self, name: bool=False) -> List[int]:
         """
         Returns all playlist ids in stormdb as a list, or as their names if you'd rather
         """
@@ -130,7 +131,7 @@ class StormDB:
         else:
             return [x["_id"] for x in r]
 
-    def get_playlist_current_info(self, playlist_id: int):
+    def get_playlist_current_info(self, playlist_id: int) -> Dict:
         """
         Returns a playlists full current record (excluding changelog)
         """
@@ -143,13 +144,13 @@ class StormDB:
         else:
             return r[0]
 
-    def get_playlist_changelog(self, playlist_id: int):
+    def get_playlist_changelog(self, playlist_id: int) -> Dict:
         """
         Returns a playlists changelog, a dictionary where each entry is a date.
         """
         q = {"_id": playlist_id}
         cols = {"changelog": 1}
-        r = list(self.playlists.find(q, cols))
+        r = list(self._playlists.find(q, cols))
 
         if len(r) == 0:
             raise Exception(f"{playlist_id} not found.")
@@ -161,13 +162,13 @@ class StormDB:
                     f"No changelog found for {playlist_id}, has it been collected more than once?"
                 )
 
-    def get_playlist_collection_date(self, playlist_id):
+    def get_playlist_collection_date(self, playlist_id: int) -> str:
         """
         Gets a playlists last collection date.
         """
         q = {"_id": playlist_id}
         cols = {"last_collected": 1}
-        r = list(self.playlists.find(q, cols))
+        r = list(self._playlists.find(q, cols))
 
         # If not found print old date
         if len(r) == 0:
@@ -177,26 +178,26 @@ class StormDB:
         else:
             raise Exception("Playlist Ambiguous, should be unique to table.")
 
-    def get_loaded_playlist_tracks(self, playlist_id):
+    def get_loaded_playlist_tracks(self, playlist_id: int) -> List[str]:
         """
         Returns a playlists most recently collected tracks
         """
         q = {"_id": playlist_id}
         cols = {"tracks": 1, "_id": 0}
-        r = list(self.playlists.find(q, cols))
+        r = list(self._playlists.find(q, cols))
 
         if len(r) == 0:
             raise ValueError(f"Playlist {playlist_id} not found.")
         else:
             return r[0]["tracks"]
 
-    def get_loaded_playlist_artists(self, playlist_id):
+    def get_loaded_playlist_artists(self, playlist_id: int) -> List[str]:
         """
         Returns a playlists most recently collected artists
         """
         q = {"_id": playlist_id}
         cols = {"artists": 1, "_id": 0}
-        r = list(self.playlists.find(q, cols))
+        r = list(self._playlists.find(q, cols))
 
         if len(r) == 0:
             raise ValueError(f"Playlist {playlist_id} not found.")
@@ -204,7 +205,7 @@ class StormDB:
             return r[0]["artists"]
 
     # Playlist Write Endpoints
-    def update_playlist(self, playlist_record):
+    def update_playlist(self, playlist_record: Dict) -> None:
 
         q = {"_id": playlist_record["_id"]}
 
@@ -221,11 +222,11 @@ class StormDB:
             k: playlist_record[k]
             for k in set(list(playlist_record.keys())) - set(exclude_keys)
         }
-        self.playlists.update_one(q, {"$set": record}, upsert=True)
+        self._playlists.update_one(q, {"$set": record}, upsert=True)
 
         # Push to append fields (date as new key)
         for key in exclude_keys:
-            self.playlists.update_one(
+            self._playlists.update_one(
                 q,
                 {
                     "$set": {
@@ -236,24 +237,24 @@ class StormDB:
             )
 
     # Artist Reading Endpoints
-    def get_known_artist_ids(self):
+    def get_known_artist_ids(self) -> List[str]:
         """
         Returns all ids from the artists db.
         """
 
         q = {}
         cols = {"_id": 1}
-        r = list(self.artists.find(q, cols))
+        r = list(self._artists.find(q, cols))
 
         return [x["_id"] for x in r]
 
-    def get_artists_for_album_collection(self, max_date):
+    def get_artists_for_album_collection(self, max_date: str) -> List[str]:
         """
         returns all artists with album collection dates before max_date.
         """
         q = {}
         cols = {"_id": 1, "album_last_collected": 1}
-        r = list(self.artists.find(q, cols))
+        r = list(self._artists.find(q, cols))
 
         # Only append artists who need collection in result
         result = []
@@ -265,18 +266,18 @@ class StormDB:
                 result.append(artist["_id"])
         return result
 
-    def get_artists_by_genres(self, genres):
+    def get_artists_by_genres(self, genres: List[str]) -> List[str]:
         """
         Gets a list artists in DB that have one or more of the genres
         """
         q = {"genres": {"$all": genres}}
         cols = {"_id": 1}
-        r = list(self.artists.find(q, cols))
+        r = list(self._artists.find(q, cols))
 
         return [x["_id"] for x in r]
 
     # Arist Write Endpoints
-    def update_artists(self, artist_info_list):
+    def update_artists(self, artist_info_list: List[Dict]) -> None:
         """
         Updates artist db with list of new artist info
         """
@@ -290,9 +291,9 @@ class StormDB:
             del artist["followers"]
             del artist["id"]
 
-            self.artists.update_one(q, {"$set": artist}, upsert=True)
+            self._artists.update_one(q, {"$set": artist}, upsert=True)
 
-    def update_artist_album_collected_date(self, artist_ids, date=None):
+    def update_artist_album_collected_date(self, artist_ids: List[str], date: str=None) -> None:
         """
         Updates a list of artists album_collected date to today by default.
         """
@@ -300,48 +301,48 @@ class StormDB:
 
         for artist_id in tqdm(artist_ids):
             q = {"_id": artist_id}
-            self.artists.update_one(
+            self._artists.update_one(
                 q, {"$set": {"album_last_collected": date}}, upsert=True
             )
 
     # Blacklist Read Enpoints
-    def get_blacklist(self, name):
+    def get_blacklist(self, name: str) -> List[str]:
         """
         Returns a full blacklist record by name (id)
         """
         q = {"_id": name}
         cols = {"_id": 1, "blacklist": 1, "type": 1, "input_playlist": 1}
-        return list(self.blacklists.find(q, cols))
+        return list(self._blacklists.find(q, cols))
 
     # Blacklist Write Endpoints
-    def update_blacklist(self, blacklist_name, artists):
+    def update_blacklist(self, blacklist_name: str, artists: List[str]) -> None:
         """
         updates a blacklists artists given its name
         """
         q = {"_id": blacklist_name}
         [
-            self.blacklists.update_one(q, {"$addToSet": {"blacklist": x}})
+            self._blacklists.update_one(q, {"$addToSet": {"blacklist": x}})
             for x in artists
         ]
 
     # Album Read Endpoints
-    def get_albums_by_release_date(self, start_date, end_date):
+    def get_albums_by_release_date(self, start_date: str, end_date: str) -> List[str]:
         """
         Get all albums in date window
         """
         q = {"release_date": {"$gt": start_date, "$lte": end_date}}
         cols = {"_id": 1}
-        r = list(sdb.albums.find(q, cols))
+        r = list(self._albums.find(q, cols))
 
         return [x["_id"] for x in r]
 
-    def get_albums_for_track_collection(self):
+    def get_albums_for_track_collection(self) -> List[str]:
         """
         Get all albums that need tracks added.
         """
         q = {}
         cols = {"_id": 1, "tracks": 1}
-        r = list(self.albums.find(q, cols))
+        r = list(self._albums.find(q, cols))
 
         # Only append artists who need collection in result
         result = []
@@ -350,7 +351,7 @@ class StormDB:
                 result.append(album["_id"])
         return result
 
-    def get_albums_from_artists_by_date(self, artists, start_date, end_date):
+    def get_albums_from_artists_by_date(self, artists: List[str], start_date: str, end_date: str) -> List[str]:
         """
         Get all albums in date window
         """
@@ -358,7 +359,7 @@ class StormDB:
         # Get starting list of albums with artists
         q = {"_id": {"$in": artists}}
         cols = {"albums": 1}
-        r = list(self.artists.find(q, cols))
+        r = list(self._artists.find(q, cols))
 
         valid_albums = []
         [valid_albums.extend(x["albums"]) for x in r if "albums" in x]
@@ -369,13 +370,13 @@ class StormDB:
             "release_date": {"$gt": start_date, "$lte": end_date},
         }
         cols = {"_id": 1}
-        r = list(self.albums.find(q, cols))
+        r = list(self._albums.find(q, cols))
 
         return [x["_id"] for x in r]
 
     def get_album_info(
-        self, album_ids, fields={"added_to_artists": 0, "tracks": 0, "artists": 0}
-    ):
+        self, album_ids: List[str], fields: Dict={"added_to_artists": 0, "tracks": 0, "artists": 0}
+    ) -> List[Dict]:
         """
         Returns specified information about a list of albums.
         """
@@ -383,17 +384,17 @@ class StormDB:
         id_lim = 50000
         batches = np.array_split(album_ids, int(np.ceil(len(album_ids) / id_lim)))
         result = []
-        for batch in tqdm(batches):
+        for batch in batches:
 
             q = {"_id": {"$in": batch.tolist()}}
             cols = fields
-            r = list(self.albums.find(q, cols))
+            r = list(self._albums.find(q, cols))
             result.extend(r)
 
         return result
 
     # Album Write Endpoints
-    def update_albums(self, album_info):
+    def update_albums(self, album_info: Dict) -> None:
         """
         update album info if needed.
         """
@@ -405,16 +406,16 @@ class StormDB:
             album["last_updated"] = dt.datetime.now().strftime("%Y-%m-%d")
             del album["id"]
 
-            self.albums.update_one(q, {"$set": album}, upsert=True)
+            self._albums.update_one(q, {"$set": album}, upsert=True)
 
     # Track Read Endpoints
-    def get_tracks_for_feature_collection(self):
+    def get_tracks_for_feature_collection(self) -> List[str]:
         """
         Get all tracks that need audio features added.
         """
         q = {}
         cols = {"_id": 1, "audio_features": 1}
-        r = list(self.tracks.find(q, cols))
+        r = list(self._tracks.find(q, cols))
 
         # Only append artists who need collection in result
         result = []
@@ -426,38 +427,38 @@ class StormDB:
                     result.append(track["_id"])
         return result
 
-    def get_tracks_from_albums(self, albums):
+    def get_tracks_from_albums(self, albums: List[str]) -> List[str]:
         """
         returns a track list based on an album list
         """
         q = {"album_id": {"$in": albums}}
         cols = {"_id": 1}
-        r = list(self.tracks.find(q, cols))
+        r = list(self._tracks.find(q, cols))
 
         return [x["_id"] for x in r]
 
-    def get_track_artists(self, track):
+    def get_track_artists(self, track: str) -> List[str]:
 
         q = {"_id": track}
         cols = {"_id": 1, "artists": 1}
 
         try:
-            return list(self.tracks.find(q, cols))[0]["artists"]
+            return list(self._tracks.find(q, cols))[0]["artists"]
         except:
             return []  # not good, for downstream bug fixing
             raise ValueError(f"Track {track} not found or doesn't have any artists.")
 
-    def get_tracks(self):
+    def get_tracks(self) -> List[str]:
         """
         Returns a list of all tracks in the database.
         """
         q = {}
         cols = {"_id": 1}
-        r = list(self.tracks.find(q, cols))
+        r = list(self._tracks.find(q, cols))
 
         return [x["_id"] for x in r]
 
-    def get_track_info(self, track_ids, fields={"artists": 0, "audio_analysis": 0}):
+    def get_track_info(self, track_ids: List[str], fields: Dict={"artists": 0, "audio_analysis": 0}) -> List[Dict]:
         """
         Returns all available information for every track in track_ids.
         Done in batches as it is a large database.
@@ -467,38 +468,38 @@ class StormDB:
         id_lim = 50000
         batches = np.array_split(track_ids, int(np.ceil(len(track_ids) / id_lim)))
         result = []
-        for batch in tqdm(batches):
+        for batch in batches:
 
             q = {"_id": {"$in": batch.tolist()}}
             cols = fields
-            r = list(self.tracks.find(q, cols))
+            r = list(self._tracks.find(q, cols))
             result.extend(r)
 
         return result
 
     # Track Write Endpoints
-    def update_tracks(self, track_info_list):
+    def update_tracks(self, track_info_list: List[Dict]) -> None:
         """
         Updates a track and its album frm a list.
         """
 
-        for track in tqdm(track_info_list):
+        for track in track_info_list:
 
             # Add track to album record
             q = {"_id": track["album_id"]}
-            self.albums.update_one(q, {"$push": {"tracks": track["id"]}}, upsert=True)
+            self._albums.update_one(q, {"$push": {"tracks": track["id"]}}, upsert=True)
 
             # Add track data to tracks
             q = {"_id": track["id"]}
             track["last_updated"] = dt.datetime.now().strftime("%Y-%m-%d")
             del track["id"]
-            self.tracks.update_one(q, {"$set": track}, upsert=True)
+            self._tracks.update_one(q, {"$set": track}, upsert=True)
 
-    def update_track_features(self, tracks):
+    def update_track_features(self, tracks: List[str]) -> None:
         """
         Updates a track's record with audio features
         """
-        for track in tqdm(tracks):
+        for track in tracks:
             q = {"_id": track["id"]}
 
             # Writing updates (formatting changes)
@@ -506,9 +507,9 @@ class StormDB:
             track["last_updated"] = dt.datetime.now().strftime("%Y-%m-%d")
             del track["id"]
 
-            self.tracks.update_one(q, {"$set": track}, upsert=True)
+            self._tracks.update_one(q, {"$set": track}, upsert=True)
 
-    def update_bad_track_features(self, bad_tracks):
+    def update_bad_track_features(self, bad_tracks: List[str]) -> None:
         """
         If tracks that can't get features are identified, mark them here
         """
@@ -520,55 +521,56 @@ class StormDB:
             track["last_updated"] = dt.datetime.now().strftime("%Y-%m-%d")
             del track["id"]
 
-            self.tracks.update_one(q, {"$set": track}, upsert=True)
+            self._tracks.update_one(q, {"$set": track}, upsert=True)
 
     # DB Cleanup and Prep / other
-    def filter_tracks_by_audio_feature(self, tracks, audio_filter):
+    def filter_tracks_by_audio_feature(self, tracks: List[str], audio_filter: Dict) -> List[str]:
         """
         Takes in a specific audio_filter format to get tracks with a filter
         """
         q = {"_id": {"$in": tracks}, **audio_filter}
         cols = {"_id": 1}
-        r = list(self.tracks.find(q, cols))
+        r = list(self._tracks.find(q, cols))
 
         return [x["_id"] for x in r]
 
-    def update_artist_albums(self):
+    def update_artist_albums(self) -> None:
         """
         Adds a track list to each artist or appends if not there
         """
 
         q = {}
         cols = {"_id": 1, "added_to_artists": 1, "artists": 1}
-        r = list(self.albums.find(q, cols))
+        r = list(self._albums.find(q, cols))
 
         for album in tqdm(r):
 
             if "added_to_artists" not in album.keys():
                 for artist in album["artists"]:
-                    self.artists.update_one(
+                    self._artists.update_one(
                         {"_id": artist},
                         {"$addToSet": {"albums": album["_id"]}},
                         upsert=True,
                     )
-                self.albums.update_one(
+                self._albums.update_one(
                     {"_id": album["_id"]}, {"$set": {"added_to_artists": True}}
                 )
             else:
                 if not album["added_to_artists"]:
                     for artist in album["artists"]:
-                        self.artists.update_one(
+                        self._artists.update_one(
                             {"_id": artist},
                             {"$addToSet": {"albums": album["_id"]}},
                             upsert=True,
                         )
-                    self.albums.update_one(
+                    self._albums.update_one(
                         {"_id": album["_id"]}, {"$set": {"added_to_artists": True}}
                     )
 
-    def gen_unique_track_id(self, track_name, artists):
+    def gen_unique_track_id(self, track_name: str, artists: List[str]) -> str:
         """
-        Consistent way to clean track names for database writing and id structure
+        Generates a unique track-name based on the name and artists,
+        avoids the same track being counted multiple times
         """
 
         bad_chars = ",. "
@@ -577,7 +579,7 @@ class StormDB:
         artist_string = "A&A".join(artists)
         return track_name + "T&A" + artist_string
 
-    def dedup_tracks_on_name(self, updated_date="2021-01-01", tracks=[]):
+    def dedup_tracks_on_name(self, updated_date: str="2021-01-01", tracks: List=[]) -> List[str]:
         """
         Copies the track database to the tracks_unique database.
         This database is dedicated to unique songs based on artist and name.
@@ -587,7 +589,7 @@ class StormDB:
         if len(tracks) == 0:
             q = {"last_updated": {"$gte": updated_date}}
             cols = {"_id": 1}
-            tracks = list(self.tracks.find(q, cols))
+            tracks = list(self._tracks.find(q, cols))
 
         # Move them in batches
         batch_size = 100
@@ -597,7 +599,7 @@ class StormDB:
 
             q = {"_id": {"$in": [x["_id"] for x in batch.tolist()]}}
             cols = {"_id": 0, "last_updated": 0}
-            r = list(self.tracks.find(q, cols))
+            r = list(self._tracks.find(q, cols))
 
             # Add track data to tracks
             for track_record in r:
@@ -608,11 +610,12 @@ class StormDB:
 
                 q = {"_id": track_record["_id"]}
                 track_record["dedup_date"] = dt.datetime.now().strftime("%Y-%m-%d")
-                self.utracks.update_one(q, {"$set": track_record}, upsert=True)
+                self._utracks.update_one(q, {"$set": track_record}, upsert=True)
 
-    def gen_unique_run_tracks(self):
+    def gen_unique_run_tracks(self) -> None:
         """
-        More of a one-time function, but will convert storm tracks into unique storm tracks
+        More of a one-time function, but will convert storm tracks into unique storm tracks.
+        Updates Run Record directly
         """
 
         storms = self.get_all_configs()
@@ -632,47 +635,3 @@ class StormDB:
                     ]
                 ).tolist()
                 self.update_run_record(run)
-
-
-class StormAnalyticsDB:
-    """
-    Wrapper for the MySQL analytics database. Unlike StormDB,
-    this is a basic anlaytics database and thus does not require
-    much schema abstraction code, as most decisions are built into
-    the view generator themselves. This just manages the IO of those
-    views so that connection to the database is managed in a single object.
-    """
-
-    def __init__(self):
-
-        cxn_string = "mysql+pymysql://{user}:{password}@{host}/{database}?host={host}?port={port}"
-        self.db_engine = create_engine(
-            cxn_string.format(
-                user=os.getenv("mysql_user"),
-                password=os.getenv("mysql_pass"),
-                host=os.getenv("mysql_server"),
-                database=os.getenv("mysql_db"),
-                port=os.getenv("mysql_port"),
-            )
-        )
-        self.cxn = self.db_engine.connect()
-
-    def read_table(self, table=None, q=None):
-        """
-        Reads a table from the SADB by name or query
-        """
-
-        if q is None:
-            df = pd.read_sql_table(table, self.cxn)
-        else:
-            df = pd.read_sql_query(q, self.cxn)
-
-        return df
-
-    def write_table(self, table, df, method="overwrite", schema="storm_analytics"):
-        """
-        writes a pandas dataframe into the DB.
-        """
-
-        if method == "overwrite":
-            df.to_sql(table, self.cxn, if_exists="replace", schema=schema, index=False)
