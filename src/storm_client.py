@@ -89,7 +89,7 @@ class StormClient:
         self._authenticate()
 
         # Good
-        l.debug("Storm Client successfully connected to Spotify.")
+        l.debug("Storm Data Client successfully connected to Spotify.")
 
     # Authentication
     def _authenticate(self) -> None:
@@ -124,12 +124,15 @@ class StormClient:
         total = int(self.sp.user_playlist_tracks(self.user_id, playlist_id, fields="total")["total"])
         num_batches = int(np.ceil(total / batch_size))
 
-        l.debug(f"Total Tracks found for playlist {playlist_id}: {total}. Getting Tracks now . . .")
+        l.debug(f"Total Tracks found for playlist {playlist_id}: {total}.")
 
         # loop through and populate track ids
         result = ["" for x in range(total)]  # List of track ids pre-initialized
 
         for i in range(num_batches):
+            
+            l.debug(f"Getting Tracks, batch {i}/{num_batches}")
+
             self._authenticate()
             response = self.sp.user_playlist_tracks(
                 self.user_id, playlist_id, fields=fields, limit=batch_size, offset=(i * batch_size)
@@ -152,12 +155,16 @@ class StormClient:
         # Call Info
         id_lim = 50
         batches = np.array_split(tracks, int(np.ceil(len(tracks) / id_lim)))
+        num_batches = len(batches)
 
-        l.debug(f"Getting Unique Artists for {len(tracks)} Tracks . . .")
+        l.debug(f"Attempting to Get Unique Artists for {len(tracks)} Tracks . . .")
 
         # Get Artists
         artists = []
-        for batch in batches:
+        for i, batch in enumerate(batches):
+
+            l.debug(f"Getting Artists, batch {i}/{num_batches}")
+
             self._authenticate()
             response = self.sp.tracks(batch, market="US")["tracks"]
 
@@ -176,12 +183,16 @@ class StormClient:
         id_lim = 50
         keys = ["followers", "genres", "id", "name", "popularity"]
         batches = np.array_split(artists, int(np.ceil(len(artists) / id_lim)))
+        num_batches = len(batches)
 
         l.debug(f"Getting {len(keys)} fields for {len(artists)} Artists . . .")
 
         # Get All artist info
         result = []
         for batch in batches:
+
+            l.debug(f"Getting Artist Info, batch {i}/{num_batches}")
+
             self._authenticate()
             response = self.sp.artists(batch)["artists"]
             result.extend(response)
@@ -212,9 +223,14 @@ class StormClient:
             "total_tracks",
         ]
 
+        total_artists = len(artists)
+        l.debug(f"Getting {len(keys)} fields for {total_artists} Artist's Albums . . .")
+
         # Get All artist info
         result = []
-        for artist in artists:
+        for i, artist in enumerate(artists):
+
+            l.debug(f"Getting Albums for {artist}, {i}/{total_artists}")
 
             # Initialize array for speed
             self._authenticate()
@@ -256,9 +272,14 @@ class StormClient:
         country = "US"
         keys = ["artists", "duration_ms", "id", "name", "explicit", "track_number"]
 
+        total_albums = len(albums)
+        l.debug(f"Getting {len(keys)} fields for {total_albums} Albums . . .")
+
         # Get All album tracks info
         result = []
         for album in albums:
+
+            l.debug(f"Getting Albums for {album}, {i}/{total_albums}")
 
             # Initialize array for speed
             self._authenticate()
@@ -307,8 +328,7 @@ class StormClient:
             "tempo",
             "tempo_confidence"
             "time_signature",
-            "time_signature_confidence",
-            ""
+            "time_signature_confidence"
         ]
         batches = np.array_split(tracks, int(np.ceil(len(tracks) / id_lim)))
         num_batches = len(batches)
@@ -318,15 +338,19 @@ class StormClient:
         for j, batch in enumerate(batches):
             l.debug(f"Acquiring Audio Features for {id_lim} tracks, batch {j+1}/{num_batches}")
 
-            self._authenticate()
-            response = self.sp.audio_features(batch)
-            result.extend([{k: x[k] for k in keys} for x in response if x is not None])
+            try:
+                self._authenticate()
+                response = self.sp.audio_features(batch)
+                result.extend([{k: x[k] for k in keys} for x in response if x is not None])
+            except:
+                l.error(f"Could not complete batch, tracks {batch}")
 
         return result
 
     def get_track_audio_analysis(self, tracks:List) -> List[Dict]:
         """
-        Gets the detailed audio analysis for a track
+        Gets the detailed audio analysis for a track. This method is slow,
+        the endpoint itself is vey slow and cannot be batched.
         """
 
         # Call Info
@@ -339,12 +363,15 @@ class StormClient:
         result = []
         for j, batch in enumerate(batches):
 
-            l.debug(f"Acquiring Audio Analysis for{id_lim} tracks, batch {j+1}/{num_batches}")
-            
+            l.debug(f"Acquiring Audio Analysis for {id_lim} tracks, batch {j+1}/{num_batches}")
+
             for i, track in enumerate(batch):
-                self._authenticate()
-                response = {'id':track}
-                response['audio_analysis'] = {k:v for k, v in self.sp.audio_analysis(track).items() if k in keys}
-                result.extend([response])
+                try:
+                    self._authenticate()
+                    response = {'id':track}
+                    response['audio_analysis'] = {k:v for k, v in self.sp.audio_analysis(track).items() if k in keys}
+                    result.extend([response])
+                except:
+                    l.error(f"Couldn't acquire audio analysis for {track}")
 
         return result

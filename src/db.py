@@ -1,3 +1,4 @@
+import logging
 import os
 from sys import getsizeof
 import json
@@ -7,16 +8,11 @@ import pandas as pd
 from tqdm import tqdm
 import numpy as np
 import datetime as dt
-from timeit import default_timer as timer
-import pymysql
 from sqlalchemy import create_engine
 
 from typing import List, Dict
 
-
-from dotenv import load_dotenv
-
-load_dotenv()
+l = logging.getLogger('storm')
 
 
 class StormDB:
@@ -48,6 +44,8 @@ class StormDB:
         self._playlists = self._db["playlists"]
         self._runs = self._db["runs"]
         self._blacklists = self._db["blacklists"]
+
+        l.debug("Storm MongoDB Backend Successfully Initialized.")
 
     # Metadata Reading endpoints
     def get_config(self, storm_name: str) -> Dict:
