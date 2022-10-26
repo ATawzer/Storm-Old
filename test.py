@@ -10,24 +10,15 @@ from src.analytics import *
 from src.weatherboy import *
 from src.storm import Storm
 
-# Test 1 - Successful Connections and syntax - Clients
-try:
-    StormClient(1241528689)
-    StormUserClient(1241528689)
+# Test 1
+print("Test 1 - Storm Client Connections and Syntax")
+StormClient(1241528689)
+StormUserClient(1241528689)
+print("Test 1 Success!")
 
-    print("Test 1 Success!")
+# Test 2
+print("Test 2 - MongoDB Connections and Syntax")
+StormDB()
+print("Test 2 Success!")
 
-except:
 
-    print("Failure with Client Connection and Initilization.")
-
-
-# Test 2 - Database Initiliazation
-try:
-    list(StormDB().artists.find({"_id":"123"}))
-
-    print("Test 2 Success!")
-
-except:
-
-    print("Failure with MongoDB Database Connection and Initilization.")

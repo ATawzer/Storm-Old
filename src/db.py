@@ -11,6 +11,8 @@ from timeit import default_timer as timer
 import pymysql
 from sqlalchemy import create_engine
 
+from typing import List, Dict
+
 
 from dotenv import load_dotenv
 
@@ -35,17 +37,17 @@ class StormDB:
             authSource=os.getenv("mongo_db"),
             authMechanism="SCRAM-SHA-256",
         )
-        self._db = self.mc[os.getenv("mongo_db")]
+        self._db = self._mc[os.getenv("mongo_db")]
 
         # initialize collections
-        self._artists = self.db["artists"]
-        self._albums = self.db["albums"]
-        self._storms = self.db["storm_metadata"]
-        self._tracks = self.db["tracks"]
-        self._utracks = self.db["tracks_unique"]
-        self._playlists = self.db["playlists"]
-        self._runs = self.db["runs"]
-        self._blacklists = self.db["blacklists"]
+        self._artists = self._db["artists"]
+        self._albums = self._db["albums"]
+        self._storms = self._db["storm_metadata"]
+        self._tracks = self._db["tracks"]
+        self._utracks = self._db["tracks_unique"]
+        self._playlists = self._db["playlists"]
+        self._runs = self._db["runs"]
+        self._blacklists = self._db["blacklists"]
 
     # Metadata Reading endpoints
     def get_config(self, storm_name: str) -> Dict:
