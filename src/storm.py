@@ -15,6 +15,7 @@ from pymongo import MongoClient
 
 # ENV
 from dotenv import load_dotenv
+
 load_dotenv()
 
 # INTERNAL
@@ -23,21 +24,23 @@ from .storm_client import *
 from .runner import *
 from .analytics import *
 
+
 class Storm:
     """
     Main callable that initiates and saves storm data
     """
+
     def __init__(self, storm_names, start_date=None):
 
         self.print_initial_screen()
         self.storm_names = storm_names
-        #self.sac = StormAnalyticsController()
+        # self.sac = StormAnalyticsController()
 
     def print_initial_screen(self):
 
         print("A Storm is Brewing. . .\n")
-        time.sleep(.5)
-        
+        time.sleep(0.5)
+
     def Run(self):
 
         print("Spinning up Storm Runners. . . ")
@@ -45,7 +48,7 @@ class Storm:
             StormRunner(storm_name).Run()
 
         print("Done Runnings, rebuilding storm_analytics")
-        #self.sac.analytics_pipeline()
-        
+        # self.sac.analytics_pipeline()
 
-#Storm(['film_vg_instrumental', 'contemporary_lyrical']).Run()
+
+# Storm(['film_vg_instrumental', 'contemporary_lyrical']).Run()

@@ -150,3 +150,6 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
+*.pbix
+scratch.py
+scratch.py

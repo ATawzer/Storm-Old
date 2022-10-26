@@ -12,6 +12,7 @@ import json
 # DB
 from .db import *
 from .storm_client import *
+from .weatherboy import *
 from pymongo import MongoClient
 
 class FakeRunner:
@@ -178,7 +179,7 @@ class StormRunner:
     """
     Orchestrates a storm run
     """
-    def __init__(self, storm_name, start_date=None):
+    def __init__(self, storm_name, start_date=None, ignore_rerelease=True):
 
         print(f"Initializing Runner for {storm_name}")
         self.sdb = StormDB()
@@ -187,6 +188,8 @@ class StormRunner:
         self.suc = StormUserClient(self.config['user_id'])
         self.name = storm_name
         self.start_date = start_date
+        self.wb = WeatherBoy(self.sdb)
+        self.ignore_rerelease = ignore_rerelease
 
         # metadata
         self.run_date = dt.datetime.now().strftime('%Y-%m-%d')
@@ -385,8 +388,9 @@ class StormRunner:
         print("Filtering Tracks.")
         self.apply_track_filters()
 
-        print("Handling Duplicates and Previously Delivered.")
-        self.filter_rereleases()
+        if self.ignore_rerelease:
+            print("Handling Duplicates and Previously Delivered.")
+            self.filter_rereleases()
 
         print("Storm Tracks Generated! \n")
 
@@ -394,14 +398,13 @@ class StormRunner:
         """
         Run Modeling process
         """
-        return None
+
+        self.run_record['storm_tracks'] = self.wb.rank_tracks(self.run_record['storm_tracks'], self.config['good_targets'], self.config['great_targets'])
 
     def write_storm_tracks(self):
         """
         Output the tracks in storm_tracks
         """
-        # Shuffling for delivery
-        np.random.shuffle(self.run_record['storm_tracks'])
 
         self.suc.write_playlist_tracks(self.config['full_storm_delivery']['playlist'], self.run_record['storm_tracks'])
 
@@ -421,7 +424,7 @@ class StormRunner:
         if self.last_run is not None:
             if 'run_date' in self.last_run.keys():
                 #last_run_date = dt.strptime(self.last_run['run_date'], "%Y-%m-%d")
-                self.start_date = self.last_run['run_date'] #last_run_date + dt.timedelta(days=1)
+                self.start_date = self.last_run['run_date'] if self.start_date is None else self.start_date
                 self.run_record['start_date'] = self.start_date
         
         if self.start_date is None:
@@ -682,16 +685,22 @@ class StormRunner:
         # Get a list of all the previous delivered storm tracks
         runs = self.sdb.get_runs_by_storm(self.name)
         window_date = (dt.datetime.now() - dt.timedelta(days=last_delivered_window)).strftime('%Y-%m-%d')
-        valid_runs = [x for x in runs if x['run_date'] > window_date]
-        print(f"Tracks remaining after dedup: {len(storm_track_df.drop_duplicates('track_uids')._id.tolist())}")
 
-        delivered_tracks = []
-        for run in valid_runs:
-            delivered_tracks.extend(run['storm_tracks_uid'])
-        delivered_tracks = np.unique(delivered_tracks).tolist()
+        if runs is not None:
+            valid_runs = [x for x in runs if x['run_date'] > window_date]
+            print(f"Tracks remaining after dedup: {len(storm_track_df.drop_duplicates('track_uids')._id.tolist())}")
 
-        # Remove previously delivered tracks
-        storm_track_df = storm_track_df[~storm_track_df.track_uids.isin(delivered_tracks)]
+            delivered_tracks = []
+            for run in valid_runs:
+
+                # Not every run generates unique keys, bug will be fixed later
+                if 'storm_tracks_uid' in run.keys():
+                    delivered_tracks.extend(run['storm_tracks_uid'])
+                    
+            delivered_tracks = np.unique(delivered_tracks).tolist()
+
+            # Remove previously delivered tracks
+            storm_track_df = storm_track_df[~storm_track_df.track_uids.isin(delivered_tracks)]
 
         # Save off the unique track ids (dedupped on their unique name)
         self.run_record['storm_tracks'] = storm_track_df.drop_duplicates('track_uids')._id.tolist()
