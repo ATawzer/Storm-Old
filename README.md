@@ -11,23 +11,23 @@ Spotify currently employs many different ways of delivering users new music. Her
 - Recommended tracks: These appear beneath playlists and are meant to give you a pick of music close to the songs in the playlist
 - Discover Weekly: A variant of release radar focusing on new artists or infrequently played artists designed to broaden a user’s musical horizons
 
-These are mostly effective ways of finding new music. However, particularly in niche genres of music or particular user tastes, these methods are often insufficient and deliver content that is disconnected from a users taste. This is likely due to the audio features available to tracks being not quite descriptive enough to really understand what it is that a user likes. Outlined below are a few issues with each of the above methods and how The Storm addresses them.
+These are mostly effective ways of finding new music. However, particularly in niche genres of music or particular user tastes, these methods can be improved with a personalized ML prediction system.
 
 ### Release Radar	
-- Problem: 30 tracks is not nearly enough to cover the entire base of a users liked artists. Additionally, when artists release lots of music only 1 or 2 of the tracks actually make it into this playlist. The 30 that do make it in often are tied to the most popular artist, not necessarily the user’s favorite.
-- Solution: The Storm has no limits, if a user tracks lots of artists, every artist will appear in that windows storm. The user can be positive no release will slip through the cracks.
+- Problem: 30 tracks does not cover the entire base of a users liked artists. Additionally, when artists release lots of music only 1 or 2 of the tracks actually make it into this playlist. The 30 that do make it in often are tied to the most popular artist, not necessarily the user’s favorite.
+- Solution: The Storm has no limits, if a user tracks lots of artists, every artist will appear in that windows storm. The user can be positive no release will slip through the cracks. How refined the delivered tracks are is up to the user and will vary by week depending on the activity of the artists they like.
 ### Curated Playlists
-- Problem: Manually maintained playlists mean a large user group must be happy with the tracks to justify the effort. Thus, the more refined taste a music-lover has, the more specific and less likely a playlist exists to match the music they like
+- Problem: Manually maintained playlists mean a large user group must be happy with the tracks to justify the effort. Thus, the more refined taste a music-lover has, the more specific and less likely a playlist exists to match the music they like.
 - Solution: Storm uses the playlists a user already frequents to generate the tracks for the user. Since it’s based on the user preference and is not limited, the user gets music only from artists they care about. Everyone could use their own storm, reducing the need for the output to be highly curated.
 ### Radios
-- Problem: While great to have on in the background, users actively looking for music will hear many of the same tracks they already know. Radios, also, have no obvious logic, meaning it would be nearly impossible to ensure all the music you are looking for would eventually make its way through a radio
+- Problem: While great to have on in the background, users actively looking for music will hear many of the same tracks they already know. 
 - Solution: Storm focuses exclusively on music the user hasn’t heard, so while it might not be great for background listening it actively monitors which tracks the user has already listened to and when they were released. This logic is transparent and allows the user to know which songs they missed and even stores the new tracks they didn’t get around to on subsequent storm runs. Using the blacklist feature, users can keep track of artists they do not want to receive music for, ensuring the thumbs-down benefit of a radio is still present.
 ### Recommended Tracks
-- Problem: In large playlists, 10-20 tracks simply does not cover the amount of music the user could potentially be tapping in to. The tracks are also heavily influenced by the popularity of a track in the sub-genre the playlist fits into.
-- Solution: Storm delivers many tracks, paying attention to every artist in the playlist. Users know the recommendation is based solely on the artists they already enjoy so new tracks are not a popularity contest but rather an artist fit.
+- Problem: In large playlists, 10-20 tracks might not cover the amount of music the user could potentially be tapping in to. The tracks are also heavily influenced by the popularity of a track in the sub-genre the playlist fits into.
+- Solution: Storm delivers many tracks, paying attention to every artist in the playlist. Users know the recommendation is based solely on the artists they already enjoy so new tracks are not a popularity contest but rather an artist and track fit. This might not deliver new recomendations as easily as spotify currently does though, so perhaps best used in conjunction.
 ### Discover Weekly
-- Problem: Once again, the number of tracks is limited here to only 30, and the artists are often quite obscure, not connected with the users preferences.
-- Solution: Storm exploits the newest music trend: Features. The Storm pays attention to all artists on a track and if you like songs with more than one artist, meaning the collaborators of your top artists are also tracked. This makes it easy to expand musical horizons and does so in parallel with the artists who create the music you already love.
+- Problem: The number of tracks is limited here to only 30. This concept seems promising, though I can't say I personally have had much luck.
+- Solution: Perhaps alongside Discover Weekly Storm's prediction scores the playlist could expand into new artists and help refine the tracks worth looking at
 
 # Setup and Usage
 
