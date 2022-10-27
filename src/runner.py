@@ -14,6 +14,8 @@ from .storm_client import *
 from .weatherboy import *
 from pymongo import MongoClient
 
+l = logging.getLogger('storm.runner')
+
 class FakeRunner:
     """
     Orchestrates a non-recorded, no API storm run given start and end_dates.
@@ -179,7 +181,7 @@ class StormRunner:
     """
     def __init__(self, storm_name, start_date=None, ignore_rerelease=True):
 
-        l.debug(f"Initializing Runner for {storm_name}")
+        l.info(f"Initializing Runner for {storm_name}")
         self.sdb = StormDB()
         self.config = self.sdb.get_config(storm_name)
         self.sc = StormClient(self.config['user_id'])
@@ -206,9 +208,9 @@ class StormRunner:
                            'removed_artists':[] # Artists filtered out
                            }
         self.last_run = self.sdb.get_last_run(self.name)
-        self.gen_dates()
+        self._gen_dates()
 
-        l.debug(f"{self.name} Started Successfully!\n")
+        l.info(f"{self.name} Started Successfully!\n")
         #self.Run()
 
     def Run(self):
@@ -216,34 +218,34 @@ class StormRunner:
         Storm Orchestration based on a configuration.
         """
 
-        l.debug(f"{self.name} - Step 0 / 8 - Initializing using last run.")
+        l.info(f"{self.name} - Step 0 / 8 - Initializing using last run.")
         self.load_last_run()
 
-        l.debug(f"{self.name} - Step 1 / 8 - Collecting Playlist Tracks and Artists. . .")
+        l.info(f"{self.name} - Step 1 / 8 - Collecting Playlist Tracks and Artists. . .")
         self.collect_playlist_info()
         
-        l.debug(f"{self.name} - Step 2 / 8 - Collecting Artist info. . .")
+        l.info(f"{self.name} - Step 2 / 8 - Collecting Artist info. . .")
         self.collect_artist_info()
 
-        l.debug(f"{self.name} - Step 3 / 8 - Collecting Albums and their Tracks. . .")
+        l.info(f"{self.name} - Step 3 / 8 - Collecting Albums and their Tracks. . .")
         self.collect_album_info()
 
-        l.debug(f"{self.name} - Step 4 / 8 - Collecting Track Features . . .")
+        l.info(f"{self.name} - Step 4 / 8 - Collecting Track Features . . .")
         self.collect_track_features()
 
-        l.debug(f"{self.name} - Step 5 / 8 - Filtering Track List . . .")
+        l.info(f"{self.name} - Step 5 / 8 - Filtering Track List . . .")
         self.filter_storm_tracks()
 
-        l.debug(f"{self.name} - Step 6 / 8 - Handing off to Weatherboy . . . ")
+        l.info(f"{self.name} - Step 6 / 8 - Handing off to Weatherboy . . . ")
         self.call_weatherboy()
 
-        l.debug(f"{self.name} - Step 7 / 8 - Writing to Spotify . . .")
+        l.info(f"{self.name} - Step 7 / 8 - Writing to Spotify . . .")
         self.write_storm_tracks()
 
-        l.debug(f"{self.name} - Step 8 / 8 - Saving Storm Run . . .")
+        l.info(f"{self.name} - Step 8 / 8 - Saving Storm Run . . .")
         self.save_run_record()
 
-        l.debug(f"{self.name} - Complete!\n")
+        l.info(f"{self.name} - Complete!\n")
     
     # Object Based orchestration
     def load_last_run(self):
@@ -416,7 +418,7 @@ class StormRunner:
 
 
     # Low Level orchestration
-    def gen_dates(self):
+    def _gen_dates(self):
         """
         If there was a last run, do all tracks in between. Otherwise do a week since run
         """
@@ -494,10 +496,10 @@ class StormRunner:
         batch_size = 20
         batches = np.array_split(artists, int(np.ceil(len(artists)/batch_size)))
 
-        l.debug(f"Batch Size: {batch_size} | Number of Batches {len(batches)}")
+        l.info(f"Batch Size: {batch_size} | Number of Batches {len(batches)}")
         for i, batch in enumerate(batches):
 
-            l.debug(f"Current Batch: {i} / {len(batches)}")
+            l.info(f"Current Batch: {i} / {len(batches)}")
             batch_albums = self.sc.get_artist_albums(batch)
             self.sdb.update_albums(batch_albums)
             self.sdb.update_artist_album_collected_date(batch)
@@ -512,13 +514,13 @@ class StormRunner:
 
         # Get their albums
         if len(to_collect) == 0:
-            l.debug("Evey Input Artist's Albums already acquired today.")
+            l.info("Evey Input Artist's Albums already acquired today.")
         else:
-            l.debug(f"New albums to collect for {len(to_collect)} artists.")
-            l.debug("Collecting data in batches from API and Updating DB.")
+            l.info(f"New albums to collect for {len(to_collect)} artists.")
+            l.info("Collecting data in batches from API and Updating DB.")
             self.load_artist_albums(to_collect)
 
-        l.debug("Updating artist album association in DB.")
+        l.info("Updating artist album association in DB.")
         self.sdb.update_artist_albums()
 
     def collect_album_tracks(self):
@@ -532,7 +534,7 @@ class StormRunner:
         batch_size = 20
         if len(needs_collection) == 0:
             l.debug("No Albums needed to collect.")
-            return True
+            return
 
         batches = np.array_split(needs_collection, int(np.ceil(len(needs_collection)/batch_size)))
         num_batches = len(batches)
@@ -545,10 +547,10 @@ class StormRunner:
 
             bad_batches = []
             consecutive_bad_batches = 0
-            l.debug(f"Batch Size: {batch_size} | Number of Batches {num_batches}")
+            l.info(f"Batch Size: {batch_size} | Number of Batches {num_batches}")
             for i, batch in enumerate(batches):
 
-                l.debug(f"Current Outer Batch: {i}/{num_batches}")
+                l.info(f"Current Outer Batch: {i}/{num_batches}")
 
                 if consecutive_bad_batches > consecutive_bad_batches_limit:
                     raise Exception(f"{consecutive_bad_batches_limit} consecutive bad batches. . . Terminating Process.")
@@ -560,14 +562,14 @@ class StormRunner:
                     consecutive_bad_batches = 0
 
                 except:
-                    l.debug("Bad Batch, will try again after.")
+                    l.error("Bad Batch, will try again after.")
                     bad_batches.append(batch)
                     consecutive_bad_batches += 1
 
             bad_batch_retries += 1
             batches = bad_batches
         
-        l.debug("All album batches collected!")
+        l.info("All album batches collected!")
         return True
 
     def apply_artist_filters(self):

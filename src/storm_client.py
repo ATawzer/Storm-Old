@@ -10,7 +10,7 @@ import datetime as dt
 
 from typing import List, Dict
 
-l = logging.getLogger("storm")
+l = logging.getLogger('storm.client')
 
 @dataclass
 class StormUserClient:
@@ -273,13 +273,11 @@ class StormClient:
         keys = ["artists", "duration_ms", "id", "name", "explicit", "track_number"]
 
         total_albums = len(albums)
-        l.debug(f"Getting {len(keys)} fields for {total_albums} Albums . . .")
+        l.debug(f"Getting Tracks for {total_albums} Albums . . .")
 
         # Get All album tracks info
         result = []
         for album in albums:
-
-            l.debug(f"Getting Albums for {album}, {i}/{total_albums}")
 
             # Initialize array for speed
             self._authenticate()
@@ -319,16 +317,13 @@ class StormClient:
             "key",
             "loudness",
             "mode",
-            "mode_confidence",
             "speechiness",
             "acousticness",
             "instrumentalness",
             "liveness",
             "valence",
             "tempo",
-            "tempo_confidence"
             "time_signature",
-            "time_signature_confidence"
         ]
         batches = np.array_split(tracks, int(np.ceil(len(tracks) / id_lim)))
         num_batches = len(batches)
@@ -369,7 +364,7 @@ class StormClient:
                 try:
                     self._authenticate()
                     response = {'id':track}
-                    response['audio_analysis'] = {k:v for k, v in self.sp.audio_analysis(track).items() if k in keys}
+                    response['audio_analysis'] = self.sp.audio_analysis(track)
                     result.extend([response])
                 except:
                     l.error(f"Couldn't acquire audio analysis for {track}")

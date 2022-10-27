@@ -12,7 +12,7 @@ from sqlalchemy import create_engine
 
 from typing import List, Dict
 
-l = logging.getLogger('storm')
+l = logging.getLogger('storm.db')
 
 
 class StormDB:
@@ -434,13 +434,14 @@ class StormDB:
         """
         
         q = {}
-        cols = {"_id": 1, "audio_analysis": 1, "audio_analysis_flag": 1}
+        cols = {"_id": 1, "audio_analysis_flag": 1}
         r = list(self._tracks.find(q, cols))
 
         # Only append artists who need collection in result
+        l.debug("Finding Tracks without audio analysis, this can take some time.")
         result = []
         for track in r:
-            if "audio_analysis" not in track.keys():
+            if "audio_analysis_flag" not in track.keys():
                 result.append(track["_id"])
             else:
                 if not track["audio_analysis_flag"]:
