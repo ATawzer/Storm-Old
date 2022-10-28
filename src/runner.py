@@ -3,7 +3,6 @@ from spotipy import util
 from spotipy import oauth2
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
 import os
 import datetime as dt
 import time
@@ -14,6 +13,8 @@ from .db import *
 from .storm_client import *
 from .weatherboy import *
 from pymongo import MongoClient
+
+l = logging.getLogger('storm.runner')
 
 class FakeRunner:
     """
@@ -31,8 +32,7 @@ class FakeRunner:
         self.run_date = run_date
 
         # Verbocity
-        self.print = print if verbocity > 0 else lambda x: None
-        self.tqdm = lambda x: tqdm(x, leave=False) if verbocity > 1 else lambda x: x
+        self.print = l.debug
 
         # metadata
         self.run_record = {'config':self.config, 
@@ -150,7 +150,7 @@ class FakeRunner:
             elif filter_name == "artist_filter":
                 if filter_value == 'hard':
                     # Limits output to tracks that contain only storm artists
-                    for track in tqdm(self.run_record['eligible_tracks']):
+                    for track in self.run_record['eligible_tracks']:
 
                         track_artists = set(self.sdb.get_track_artists(track))
                         if not track_artists.issubset(set(self.run_record['storm_artists'])):
@@ -159,7 +159,7 @@ class FakeRunner:
                 elif filter_value == 'soft':
                     # Removes tracks that contain known filtered out artists
                     # Other 'bad' artists could sneak in if not tracked by storm
-                    for track in tqdm(self.run_record['eligible_tracks']):
+                    for track in self.run_record['eligible_tracks']:
                         track_artists = set(self.sdb.get_track_artists(track))
                         if not set(self.run_record['removed_artists']).isdisjoint(track_artists):
                             bad_tracks.append(track)
@@ -181,7 +181,7 @@ class StormRunner:
     """
     def __init__(self, storm_name, start_date=None, ignore_rerelease=True):
 
-        print(f"Initializing Runner for {storm_name}")
+        l.info(f"Initializing Runner for {storm_name}")
         self.sdb = StormDB()
         self.config = self.sdb.get_config(storm_name)
         self.sc = StormClient(self.config['user_id'])
@@ -208,9 +208,9 @@ class StormRunner:
                            'removed_artists':[] # Artists filtered out
                            }
         self.last_run = self.sdb.get_last_run(self.name)
-        self.gen_dates()
+        self._gen_dates()
 
-        print(f"{self.name} Started Successfully!\n")
+        l.info(f"{self.name} Started Successfully!\n")
         #self.Run()
 
     def Run(self):
@@ -218,34 +218,34 @@ class StormRunner:
         Storm Orchestration based on a configuration.
         """
 
-        print(f"{self.name} - Step 0 / 8 - Initializing using last run.")
+        l.info(f"{self.name} - Step 0 / 8 - Initializing using last run.")
         self.load_last_run()
 
-        print(f"{self.name} - Step 1 / 8 - Collecting Playlist Tracks and Artists. . .")
+        l.info(f"{self.name} - Step 1 / 8 - Collecting Playlist Tracks and Artists. . .")
         self.collect_playlist_info()
         
-        print(f"{self.name} - Step 2 / 8 - Collecting Artist info. . .")
+        l.info(f"{self.name} - Step 2 / 8 - Collecting Artist info. . .")
         self.collect_artist_info()
 
-        print(f"{self.name} - Step 3 / 8 - Collecting Albums and their Tracks. . .")
+        l.info(f"{self.name} - Step 3 / 8 - Collecting Albums and their Tracks. . .")
         self.collect_album_info()
 
-        print(f"{self.name} - Step 4 / 8 - Collecting Track Features . . .")
+        l.info(f"{self.name} - Step 4 / 8 - Collecting Track Features . . .")
         self.collect_track_features()
 
-        print(f"{self.name} - Step 5 / 8 - Filtering Track List . . .")
+        l.info(f"{self.name} - Step 5 / 8 - Filtering Track List . . .")
         self.filter_storm_tracks()
 
-        print(f"{self.name} - Step 6 / 8 - Handing off to Weatherboy . . . ")
+        l.info(f"{self.name} - Step 6 / 8 - Handing off to Weatherboy . . . ")
         self.call_weatherboy()
 
-        print(f"{self.name} - Step 7 / 8 - Writing to Spotify . . .")
+        l.info(f"{self.name} - Step 7 / 8 - Writing to Spotify . . .")
         self.write_storm_tracks()
 
-        print(f"{self.name} - Step 8 / 8 - Saving Storm Run . . .")
+        l.info(f"{self.name} - Step 8 / 8 - Saving Storm Run . . .")
         self.save_run_record()
 
-        print(f"{self.name} - Complete!\n")
+        l.info(f"{self.name} - Complete!\n")
     
     # Object Based orchestration
     def load_last_run(self):
@@ -254,10 +254,10 @@ class StormRunner:
         """
 
         if self.last_run is None:
-            print("Storm is new, nothing to load")
+            l.debug("Storm is new, nothing to load")
 
         else:
-            print("Appending last runs tracks and artists.")
+            l.debug("Appending last runs tracks and artists.")
             self.run_record['input_tracks'].extend(self.last_run['input_tracks'])
             self.run_record['input_artists'].extend(self.last_run['storm_artists']) # Post-filter
 
@@ -266,17 +266,17 @@ class StormRunner:
         Initial Playlist setup orchestration
         """
 
-        print("Loading Great Targets . . .")
+        l.info("Loading Great Targets . . .")
         self.load_playlist(self.config['great_targets'])
 
-        print("Loading Good Targets . . .")
+        l.info("Loading Good Targets . . .")
         self.load_playlist(self.config['good_targets'])
 
         # Check for additional playlists
         if 'additional_input_playlists' in self.config.keys():
             if self.config['additional_input_playlists']['is_active']:
                 for ap, ap_id in self.config['additional_input_playlists']['playlists'].items():
-                    print(f"Loading Additional Playlist: {ap}")
+                    l.info(f"Loading Additional Playlist: {ap}")
                     self.load_playlist(ap_id)
         
         # Check what songs remain in sample and full delivery
@@ -286,7 +286,7 @@ class StormRunner:
         self.load_output_playlist(self.config['rolling_good']['playlist'])
         # Check if we need to move rolling
        
-        print("Playlists Prepared. \n")
+        l.info("Playlists Prepared. \n")
 
     def collect_artist_info(self):
         """
@@ -298,29 +298,29 @@ class StormRunner:
         new_artists = [x for x in self.run_record['input_artists'] if x not in known_artists]
 
         if len(new_artists) > 0:
-            print(f"{len(new_artists)} New Artists Found! Getting their info now.")
+            l.info(f"{len(new_artists)} New Artists Found! Getting their info now.")
             new_artist_info = self.sc.get_artist_info(new_artists)
 
-            print("Writing their info to DB . . .")
+            l.info("Writing their info to DB . . .")
             self.sdb.update_artists(new_artist_info)
         
         else:
-            print("No new Artists found.")
+            l.info("No new Artists found.")
 
-        print("Artist Info Collection Done.\n")
+        l.info("Artist Info Collection Done.\n")
 
     def collect_album_info(self):
         """
         Get and update all albums associated with the artists
         """
         
-        print("Getting the albums for Input Artists that haven't been acquired.")
+        l.info("Getting the albums for Input Artists that haven't been acquired.")
         self.collect_artist_albums()
         
-        print("Getting tracks for albums that need it")
+        l.info("Getting tracks for albums that need it")
         self.collect_album_tracks()
     
-        print("Album Collection Done. \n")
+        l.info("Album Collection Done. \n")
 
     def collect_track_features(self):
         """
@@ -330,7 +330,7 @@ class StormRunner:
         
         to_collect = self.sdb.get_tracks_for_feature_collection()
         if len(to_collect) == 0:
-            print("No Track Features to collect.")
+            l.debug("No Track Features to collect.")
             return True
 
         batch_size = 1000
@@ -344,9 +344,11 @@ class StormRunner:
 
             bad_batches = []
             consecutive_bad_batches = 0
-            print(f"Batch Size: {batch_size} | Number of Batches {len(batches)}")
-            for batch in tqdm(batches):
+            num_batches = len(batches)
+            l.debug(f"Batch Size: {batch_size} | Number of Batches {num_batches}")
+            for i, batch in enumerate(batches):
 
+                l.debug(f"Current Outer Batch: {i}/{num_batches}")
                 if consecutive_bad_batches > consecutive_bad_batches_limit:
                     raise Exception(f"{consecutive_bad_batches_limit} consecutive bad batches. . . Terminating Process.")
                 try:
@@ -357,7 +359,7 @@ class StormRunner:
                     consecutive_bad_batches = 0
 
                 except:
-                    print("Bad Batch, will try again after.")
+                    l.debug("Bad Batch, will try again after.")
                     bad_batches.append(batch)
                     consecutive_bad_batches += 1
 
@@ -366,8 +368,8 @@ class StormRunner:
 
             bad_batch_retries += 1
         
-        print("All Track batches collected!")
-        print("Track Collection Done! \n")
+        l.debug("All Track batches collected!")
+        l.debug("Track Collection Done! \n")
         return True
 
     def filter_storm_tracks(self):
@@ -375,24 +377,24 @@ class StormRunner:
         Get a List of tracks to deliver.
         """
 
-        print("Filtering artists.")
+        l.debug("Filtering artists.")
         self.apply_artist_filters()
 
-        print("Obtaining all albums from storm artists.")
+        l.debug("Obtaining all albums from storm artists.")
         self.run_record['storm_albums'] = self.sdb.get_albums_from_artists_by_date(self.run_record['storm_artists'], 
                                                                                    self.run_record['start_date'],
                                                                                    self.run_date)
-        print("Getting tracks from albums.")
+        l.debug("Getting tracks from albums.")
         self.run_record['eligible_tracks'] = self.sdb.get_tracks_from_albums(self.run_record['storm_albums'])
 
-        print("Filtering Tracks.")
+        l.debug("Filtering Tracks.")
         self.apply_track_filters()
 
         if self.ignore_rerelease:
-            print("Handling Duplicates and Previously Delivered.")
+            l.debug("Handling Duplicates and Previously Delivered.")
             self.filter_rereleases()
 
-        print("Storm Tracks Generated! \n")
+        l.debug("Storm Tracks Generated! \n")
 
     def call_weatherboy(self):
         """
@@ -416,7 +418,7 @@ class StormRunner:
 
 
     # Low Level orchestration
-    def gen_dates(self):
+    def _gen_dates(self):
         """
         If there was a last run, do all tracks in between. Otherwise do a week since run
         """
@@ -447,11 +449,11 @@ class StormRunner:
             playlist_record['tracks'] = self.sc.get_playlist_tracks(playlist_id)
             playlist_record['artists'] = self.sc.get_artists_from_tracks(playlist_record['tracks'])
 
-            print("Writing changes to DB")
+            l.debug("Writing changes to DB")
             self.sdb.update_playlist(playlist_record)
 
         else:
-            print("Skipping API Load, already collected today.")
+            l.debug("Skipping API Load, already collected today.")
 
         # Get the playlists tracks from DB
         input_tracks = self.sdb.get_loaded_playlist_tracks(playlist_id)
@@ -479,13 +481,13 @@ class StormRunner:
             if len(playlist_record['tracks']) > 0:
                 playlist_record['artists'] = self.sc.get_artists_from_tracks(playlist_record['tracks'])
 
-                print("Writing changes to DB")
+                l.debug("Writing changes to DB")
                 self.sdb.update_playlist(playlist_record)
             else:
-                print("No tracks, must be new storm or something odd is happening.")
+                l.debug("No tracks, must be new storm or something odd is happening.")
 
         else:
-            print("Skipping API Load, already collected today.")
+            l.debug("Skipping API Load, already collected today.")
 
     def load_artist_albums(self, artists):
         """
@@ -494,9 +496,10 @@ class StormRunner:
         batch_size = 20
         batches = np.array_split(artists, int(np.ceil(len(artists)/batch_size)))
 
-        print(f"Batch Size: {batch_size} | Number of Batches {len(batches)}")
-        for batch in tqdm(batches):
+        l.info(f"Batch Size: {batch_size} | Number of Batches {len(batches)}")
+        for i, batch in enumerate(batches):
 
+            l.info(f"Current Batch: {i} / {len(batches)}")
             batch_albums = self.sc.get_artist_albums(batch)
             self.sdb.update_albums(batch_albums)
             self.sdb.update_artist_album_collected_date(batch)
@@ -511,13 +514,13 @@ class StormRunner:
 
         # Get their albums
         if len(to_collect) == 0:
-            print("Evey Input Artist's Albums already acquired today.")
+            l.info("Evey Input Artist's Albums already acquired today.")
         else:
-            print(f"New albums to collect for {len(to_collect)} artists.")
-            print("Collecting data in batches from API and Updating DB.")
+            l.info(f"New albums to collect for {len(to_collect)} artists.")
+            l.info("Collecting data in batches from API and Updating DB.")
             self.load_artist_albums(to_collect)
 
-        print("Updating artist album association in DB.")
+        l.info("Updating artist album association in DB.")
         self.sdb.update_artist_albums()
 
     def collect_album_tracks(self):
@@ -530,10 +533,11 @@ class StormRunner:
         needs_collection = self.sdb.get_albums_for_track_collection()
         batch_size = 20
         if len(needs_collection) == 0:
-            print("No Albums needed to collect.")
-            return True
+            l.debug("No Albums needed to collect.")
+            return
 
         batches = np.array_split(needs_collection, int(np.ceil(len(needs_collection)/batch_size)))
+        num_batches = len(batches)
 
         # Attempt to go get the batches
         bad_batch_retries = 0
@@ -543,8 +547,10 @@ class StormRunner:
 
             bad_batches = []
             consecutive_bad_batches = 0
-            print(f"Batch Size: {batch_size} | Number of Batches {len(batches)}")
-            for batch in tqdm(batches):
+            l.info(f"Batch Size: {batch_size} | Number of Batches {num_batches}")
+            for i, batch in enumerate(batches):
+
+                l.info(f"Current Outer Batch: {i}/{num_batches}")
 
                 if consecutive_bad_batches > consecutive_bad_batches_limit:
                     raise Exception(f"{consecutive_bad_batches_limit} consecutive bad batches. . . Terminating Process.")
@@ -556,14 +562,14 @@ class StormRunner:
                     consecutive_bad_batches = 0
 
                 except:
-                    print("Bad Batch, will try again after.")
+                    l.error("Bad Batch, will try again after.")
                     bad_batches.append(batch)
                     consecutive_bad_batches += 1
 
             bad_batch_retries += 1
             batches = bad_batches
         
-        print("All album batches collected!")
+        l.info("All album batches collected!")
         return True
 
     def apply_artist_filters(self):
@@ -575,10 +581,10 @@ class StormRunner:
         bad_artists = []
 
         # Filters
-        print(f"{len(filters)} valid filters to apply")
+        l.debug(f"{len(filters)} valid filters to apply")
         for filter_name, filter_value in filters.items():
             
-            print(f"Attemping filter {filter_name} - {filter_value}")
+            l.debug(f"Attemping filter {filter_name} - {filter_value}")
             if filter_name == 'genre':
                 # Add all known artists in sdb of a genre to remove in tracks later
                 genre_artists = self.sdb.get_artists_by_genres(filter_value)
@@ -587,11 +593,11 @@ class StormRunner:
             elif filter_name == 'blacklist':
                 blacklist = self.sdb.get_blacklist(filter_value)
                 if len(blacklist) == 0:
-                    print(f"{filter_value} not found, no filtering will be done.'")
+                    l.debug(f"{filter_value} not found, no filtering will be done.'")
                 else:
-                    print(f"{filter_value} found!'")
+                    l.debug(f"{filter_value} found!'")
                     if 'input_playlist' in blacklist[0].keys():
-                        print("Updating Blacklist . . .")
+                        l.debug("Updating Blacklist . . .")
                         self.update_blacklist_from_playlist(blacklist[0]['_id'], blacklist[0]['input_playlist'])
 
                         # Reload
@@ -622,24 +628,24 @@ class StormRunner:
         bad_tracks = []
 
         # Filters
-        print(f"{len(filters)} valid filters to apply")
+        l.debug(f"{len(filters)} valid filters to apply")
         for filter_name, filter_value in filters.items():
             
-            print(f"Attemping filter {filter_name} - {filter_value}")
+            l.debug(f"Attemping filter {filter_name} - {filter_value} on {len(self.run_record['eligible_tracks'])} Tracks.")
             if filter_name == 'audio_features':
                 for feature, feature_value in filter_value.items():
                     op = f"${feature_value.split('&&')[0]}"
                     val = float(feature_value.split('&&')[1])
-                    print(f"Removing tracks with {feature} - {op}:{val}")
+                    l.debug(f"Removing tracks with {feature} - {op}:{val}")
                     valid = self.sdb.filter_tracks_by_audio_feature(self.run_record['eligible_tracks'], {feature:{op:val}})
                     bad_tracks.extend([x for x in self.run_record['eligible_tracks'] if x not in valid])
-                    print(f"Cumulative Bad Tracks found {len(np.unique(bad_tracks))}")
+                    l.debug(f"Cumulative Bad Tracks found {len(np.unique(bad_tracks))}")
 
                 
             elif filter_name == "artist_filter":
                 if filter_value == 'hard':
                     # Limits output to tracks that contain only storm artists
-                    for track in tqdm(self.run_record['eligible_tracks']):
+                    for track in self.run_record['eligible_tracks']:
 
                         track_artists = set(self.sdb.get_track_artists(track))
                         if not track_artists.issubset(set(self.run_record['storm_artists'])):
@@ -648,20 +654,20 @@ class StormRunner:
                 elif filter_value == 'soft':
                     # Removes tracks that contain known filtered out artists
                     # Other 'bad' artists could sneak in if not tracked by storm
-                    for track in tqdm(self.run_record['eligible_tracks']):
+                    for track in self.run_record['eligible_tracks']:
                         track_artists = set(self.sdb.get_track_artists(track))
                         if not set(self.run_record['removed_artists']).isdisjoint(track_artists):
                             bad_tracks.append(track)
 
             else:
-                print(f"{filter_name} not supported or misspelled. ")
+                l.debug(f"{filter_name} not supported or misspelled. ")
 
         bad_tracks = np.unique(bad_tracks).tolist()
-        print("Removing bad tracks . . .")
+        l.debug("Removing bad tracks . . .")
         self.run_record['storm_tracks'] = [x for x in self.run_record['eligible_tracks'] if x not in bad_tracks]
         self.run_record['removed_tracks'] = bad_tracks
-        print(f"Starting Track Amount: {len(self.run_record['eligible_tracks'])}")
-        print(f"Ending Track Amount: {len(self.run_record['storm_tracks'])}")
+        l.debug(f"Starting Track Amount: {len(self.run_record['eligible_tracks'])}")
+        l.debug(f"Ending Track Amount: {len(self.run_record['storm_tracks'])}")
 
     def filter_rereleases(self, last_delivered_window=60):
         """
@@ -676,7 +682,7 @@ class StormRunner:
         """
 
         # Convert storm tracks to their uids
-        print(f"Starting Storm Track Amount: {len(self.run_record['storm_tracks'])}")
+        l.debug(f"Starting Storm Track Amount: {len(self.run_record['storm_tracks'])}")
         storm_tracks = self.sdb.get_track_info(self.run_record['storm_tracks'], {"_id":1, 'name':1, 'artists':1})
         storm_track_df = pd.DataFrame(storm_tracks)
         storm_track_df['track_uids'] = storm_track_df.apply(lambda x: self.sdb.gen_unique_track_id(x['name'], x['artists']), axis=1)
@@ -688,7 +694,7 @@ class StormRunner:
 
         if runs is not None:
             valid_runs = [x for x in runs if x['run_date'] > window_date]
-            print(f"Tracks remaining after dedup: {len(storm_track_df.drop_duplicates('track_uids')._id.tolist())}")
+            l.debug(f"Tracks remaining after dedup: {len(storm_track_df.drop_duplicates('track_uids')._id.tolist())}")
 
             delivered_tracks = []
             for run in valid_runs:
@@ -705,4 +711,4 @@ class StormRunner:
         # Save off the unique track ids (dedupped on their unique name)
         self.run_record['storm_tracks'] = storm_track_df.drop_duplicates('track_uids')._id.tolist()
         self.run_record['storm_tracks_uid'] = storm_track_df['track_uids'].unique().tolist()
-        print(f"Ending Storm Track Amount: {len(self.run_record['storm_tracks'])}")
+        l.debug(f"Ending Storm Track Amount: {len(self.run_record['storm_tracks'])}")

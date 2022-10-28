@@ -1,3 +1,4 @@
+import logging
 import os
 from sys import getsizeof
 import json
@@ -7,16 +8,11 @@ import pandas as pd
 from tqdm import tqdm
 import numpy as np
 import datetime as dt
-from timeit import default_timer as timer
-import pymysql
 from sqlalchemy import create_engine
 
 from typing import List, Dict
 
-
-from dotenv import load_dotenv
-
-load_dotenv()
+l = logging.getLogger('storm.db')
 
 
 class StormDB:
@@ -48,6 +44,8 @@ class StormDB:
         self._playlists = self._db["playlists"]
         self._runs = self._db["runs"]
         self._blacklists = self._db["blacklists"]
+
+        l.debug("Storm MongoDB Backend Successfully Initialized.")
 
     # Metadata Reading endpoints
     def get_config(self, storm_name: str) -> Dict:
@@ -436,13 +434,14 @@ class StormDB:
         """
         
         q = {}
-        cols = {"_id": 1, "audio_analysis": 1, "audio_analysis_flag": 1}
+        cols = {"_id": 1, "audio_analysis_flag": 1}
         r = list(self._tracks.find(q, cols))
 
         # Only append artists who need collection in result
+        l.debug("Finding Tracks without audio analysis, this can take some time.")
         result = []
         for track in r:
-            if "audio_analysis" not in track.keys():
+            if "audio_analysis_flag" not in track.keys():
                 result.append(track["_id"])
             else:
                 if not track["audio_analysis_flag"]:

@@ -9,9 +9,6 @@ from src.runner import *
 from src.analytics import *
 from src.weatherboy import *
 
-# StormRunner('contemporary_lyrical_v2').Run()
-# StormRunner('film_vg_instrumental_v2').Run()
-
 root = logging.getLogger("storm")
 root.setLevel(logging.DEBUG)
 
