@@ -266,17 +266,17 @@ class StormRunner:
         Initial Playlist setup orchestration
         """
 
-        l.debug("Loading Great Targets . . .")
+        l.info("Loading Great Targets . . .")
         self.load_playlist(self.config['great_targets'])
 
-        l.debug("Loading Good Targets . . .")
+        l.info("Loading Good Targets . . .")
         self.load_playlist(self.config['good_targets'])
 
         # Check for additional playlists
         if 'additional_input_playlists' in self.config.keys():
             if self.config['additional_input_playlists']['is_active']:
                 for ap, ap_id in self.config['additional_input_playlists']['playlists'].items():
-                    l.debug(f"Loading Additional Playlist: {ap}")
+                    l.info(f"Loading Additional Playlist: {ap}")
                     self.load_playlist(ap_id)
         
         # Check what songs remain in sample and full delivery
@@ -286,7 +286,7 @@ class StormRunner:
         self.load_output_playlist(self.config['rolling_good']['playlist'])
         # Check if we need to move rolling
        
-        l.debug("Playlists Prepared. \n")
+        l.info("Playlists Prepared. \n")
 
     def collect_artist_info(self):
         """
@@ -298,29 +298,29 @@ class StormRunner:
         new_artists = [x for x in self.run_record['input_artists'] if x not in known_artists]
 
         if len(new_artists) > 0:
-            l.debug(f"{len(new_artists)} New Artists Found! Getting their info now.")
+            l.info(f"{len(new_artists)} New Artists Found! Getting their info now.")
             new_artist_info = self.sc.get_artist_info(new_artists)
 
-            l.debug("Writing their info to DB . . .")
+            l.info("Writing their info to DB . . .")
             self.sdb.update_artists(new_artist_info)
         
         else:
-            l.debug("No new Artists found.")
+            l.info("No new Artists found.")
 
-        l.debug("Artist Info Collection Done.\n")
+        l.info("Artist Info Collection Done.\n")
 
     def collect_album_info(self):
         """
         Get and update all albums associated with the artists
         """
         
-        l.debug("Getting the albums for Input Artists that haven't been acquired.")
+        l.info("Getting the albums for Input Artists that haven't been acquired.")
         self.collect_artist_albums()
         
-        l.debug("Getting tracks for albums that need it")
+        l.info("Getting tracks for albums that need it")
         self.collect_album_tracks()
     
-        l.debug("Album Collection Done. \n")
+        l.info("Album Collection Done. \n")
 
     def collect_track_features(self):
         """
