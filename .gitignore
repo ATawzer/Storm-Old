@@ -150,7 +150,10 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
+
+# Custom
 *.pbix
 scratch.py
 scratch.py
 run.py
+*.txt
