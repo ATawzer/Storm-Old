@@ -131,7 +131,7 @@ class StormDB:
         else:
             return [x["_id"] for x in r]
 
-    def get_playlist_current_info(self, playlist_id: int) -> Dict:
+    def get_playlist_current_info(self, playlist_id: str) -> Dict:
         """
         Returns a playlists full current record (excluding changelog)
         """
@@ -144,7 +144,7 @@ class StormDB:
         else:
             return r[0]
 
-    def get_playlist_changelog(self, playlist_id: int) -> Dict:
+    def get_playlist_changelog(self, playlist_id: str) -> Dict:
         """
         Returns a playlists changelog, a dictionary where each entry is a date.
         """
@@ -162,7 +162,7 @@ class StormDB:
                     f"No changelog found for {playlist_id}, has it been collected more than once?"
                 )
 
-    def get_playlist_collection_date(self, playlist_id: int) -> str:
+    def get_playlist_collection_date(self, playlist_id: str) -> str:
         """
         Gets a playlists last collection date.
         """
@@ -178,7 +178,7 @@ class StormDB:
         else:
             raise Exception("Playlist Ambiguous, should be unique to table.")
 
-    def get_loaded_playlist_tracks(self, playlist_id: int) -> List[str]:
+    def get_loaded_playlist_tracks(self, playlist_id: str) -> List[str]:
         """
         Returns a playlists most recently collected tracks
         """
@@ -191,7 +191,7 @@ class StormDB:
         else:
             return r[0]["tracks"]
 
-    def get_loaded_playlist_artists(self, playlist_id: int) -> List[str]:
+    def get_loaded_playlist_artists(self, playlist_id: str) -> List[str]:
         """
         Returns a playlists most recently collected artists
         """
@@ -433,12 +433,12 @@ class StormDB:
         Get all tracks that need audio analysis added.
         """
         
+        l.debug("Finding Tracks without audio analysis, this can take some time.")
         q = {}
         cols = {"_id": 1, "audio_analysis_flag": 1}
         r = list(self._tracks.find(q, cols))
 
         # Only append artists who need collection in result
-        l.debug("Finding Tracks without audio analysis, this can take some time.")
         result = []
         for track in r:
             if "audio_analysis_flag" not in track.keys():
