@@ -498,6 +498,16 @@ class StormDB:
 
         return result
 
+    def get_tracks_from_artists(self, artists: List[str], start_date: str, end_date: str) -> List[str]:
+        """
+        Returns all tracks in database from a list of artists and a date range for releases.
+        """
+        
+        albums = self.get_albums_from_artists_by_date(artists, start_date, end_date)
+        tracks = np.unique(self.get_tracks_from_albums(albums)).tolist()
+        
+        return tracks
+
     # Track Write Endpoints
     def update_tracks(self, track_info_list: List[Dict]) -> None:
         """
