@@ -23,16 +23,19 @@ class StormDB:
     needed for storm operations and machine learning.
     """
 
-    def __init__(self):
+    def __init__(self, mongo_client=None):
 
         # Build mongo client and db
-        self._mc = MongoClient(
-            os.getenv("mongo_host"),
-            username=os.getenv("mongo_user"),
-            password=os.getenv("mongo_pass"),
-            authSource=os.getenv("mongo_db"),
-            authMechanism="SCRAM-SHA-256",
-        )
+        if mongo_client is None:
+            self._mc = MongoClient(
+                os.getenv("mongo_host"),
+                username=os.getenv("mongo_user"),
+                password=os.getenv("mongo_pass"),
+                authSource=os.getenv("mongo_db"),
+                authMechanism="SCRAM-SHA-256",
+            )
+        else:
+            self._mc = mongo_client
         self._db = self._mc[os.getenv("mongo_db")]
 
         # initialize collections

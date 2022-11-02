@@ -2,6 +2,7 @@
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
+import joblib
 
 from dotenv import load_dotenv
 load_dotenv() 
@@ -13,27 +14,45 @@ import os
 from .db import *
 
 class WeatherBoy:
+    """
+    Main Model Interface, handles loading models and returning
+    predictions from them.
+    """
 
-    def __init__(self, sdb):
+    def __init__(self, sdb: StormDB, model_name, model_dir: str='../models/'):
 
-        self.sdb = sdb
+        self._sdb = sdb
+
+        self.model_name = model_name
+        self._model_dir = model_dir
+        self._load_model()
+
+    def generate_prediction_scores(self, track_ids):
+        """
+        Runs Data pipeline and scores based on the configured model.
+        """
+
+        l.debug(f"Sourcing Data for prediction on {len(track_ids)} tracks.")
+        track_df = pd.DataFrame.from_records(self._sdb.get_track_info(track_ids, fields={"last_updated":0}))
+        return self._model.predict_proba(track_df)
+
+    def _load_model(self):
+
+        try:
+            self._model = joblib.load(f"{self._model_dir}{self.model_name}/.pkl")
+        except:
+            ValueError(f"Could not load {self._model_dir}, does the model exist? Was it serialized properly?")
 
     def rank_tracks(self, tracks, good_playlist, great_playlist):
         """
-        Ranks storm tracks
+        Ranks storm tracks. 
         """
 
-        track_info = self.sdb.get_track_info(tracks, fields={'artists':1, 'album_id':1})
-        good_tracks = self.sdb.get_loaded_playlist_tracks(good_playlist)
-        great_tracks = self.sdb.get_loaded_playlist_tracks(great_playlist)    
+        df = pd.DataFrame(
+            {
+                'track_id':tracks,
+                'prediction_scores':self.generate_prediction_scores(tracks)
+            }
+        )
 
-        good_artists = np.array([artist for track in self.sdb.get_track_info(good_tracks, fields={'artists':1}) for artist in track['artists']])
-        great_artists = np.array([artist for track in self.sdb.get_track_info(great_tracks, fields={'artists':1}) for artist in track['artists']])
-
-        # Ranks according to presence
-        for track in tqdm(track_info):
-            track['artist_count'] = np.mean([np.count_nonzero(good_artists==x) for x in track['artists']]) + \
-                                            (10*np.mean([np.count_nonzero(great_artists==x) for x in track['artists']]))
-
-        df = pd.DataFrame(track_info).sort_values(['artist_count', 'album_id'], ascending=False)
-        return df['_id'].tolist()
+        return df.sort_values('prediction_scores', descending=True)['track_id'].tolist()
