@@ -8,7 +8,11 @@ from src.db import *
 from src.runner import *
 from src.analytics import *
 from src.weatherboy import *
-from src.storm import Storm
+from src.modeling import ModelManager
+
+
+ModelManager()
+print("ModelManager Created")
 
 # Test 1
 print("Test 1 - Storm Client Connections and Syntax")
