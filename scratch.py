@@ -18,7 +18,9 @@ formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(messag
 handler.setFormatter(formatter)
 root.addHandler(handler)
 
-sdb = StormDB()
+suc = StormUserClient(1241528689)
+
+""" sdb = StormDB()
 sc = StormClient(1241528689)
 
 tracks = sdb.get_tracks_for_audio_analysis()
@@ -29,4 +31,4 @@ for i, batch in enumerate(batches):
 
     l.debug(f"Collecting Tracks {i*100} - {(i+1)*100} of {num_tracks}")
     featurized_tracks = sc.get_track_audio_analysis(batch)
-    sdb.update_track_analysis(featurized_tracks)
+    sdb.update_track_analysis(featurized_tracks) """

@@ -188,7 +188,7 @@ class StormRunner:
         self.suc = StormUserClient(self.config['user_id'])
         self.name = storm_name
         self.start_date = start_date
-        self.wb = WeatherBoy(self.sdb)
+        #self.wb = WeatherBoy(self.sdb)
         self.ignore_rerelease = ignore_rerelease
 
         # metadata
@@ -237,7 +237,7 @@ class StormRunner:
         self.filter_storm_tracks()
 
         l.info(f"{self.name} - Step 6 / 8 - Handing off to Weatherboy . . . ")
-        self.call_weatherboy()
+        #self.call_weatherboy()
 
         l.info(f"{self.name} - Step 7 / 8 - Writing to Spotify . . .")
         self.write_storm_tracks()

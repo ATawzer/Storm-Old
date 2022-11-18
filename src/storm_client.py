@@ -18,7 +18,7 @@ class StormUserClient:
     The User Client handles communicating with User specific assets, such as playlists
     This must be authenticated and allowed by the user, specified at initialization with user_id
     """
-    user_id: int
+    __user_id: int
     scope: str = "playlist-modify-private playlist-modify-public"
     client_id: str = os.getenv("storm_client_id")  # API app id
     client_secret: str = os.getenv("storm_client_secret")  # API app secret
@@ -37,13 +37,13 @@ class StormUserClient:
         Connect to Spotify API, intialize spotipy object and generate access token.
         """
         self.token = util.prompt_for_user_token(
-            self.user_id,
+            self.__user_id,
             scope=self.scope,
             client_id=self.client_id,
             client_secret=self.client_secret,
             redirect_uri="http://localhost/",
         )
-        self.sp = spotipy.Spotify(auth=self.token)
+        self._sp = spotipy.Spotify(auth=self.token)
         self.token_start = dt.datetime.now()
 
     def write_playlist_tracks(self, playlist_id: int, tracks: List) -> None:
@@ -57,13 +57,49 @@ class StormUserClient:
 
         # First batch overwrite
         self._authenticate()
-        self.sp.user_playlist_replace_tracks(self.user_id, playlist_id, batches[0])
+        self._sp.user_playlist_replace_tracks(self.__user_id, playlist_id, batches[0])
 
         for batch in tqdm(batches[1:]):
-            self.sp.user_playlist_add_tracks(self.user_id, playlist_id, batch)
+            self._sp.user_playlist_add_tracks(self.__user_id, playlist_id, batch)
 
         l.debug(f"Successfully Wrote {len(tracks)} Tracks to {playlist_id}")
+
+    def write_playlist_tracks_by_name(self, playlist_name: str, tracks: List) -> None:
+        """
+        Writes a list of track ids into a user's playlist
+        """
         
+        # Find playlist
+        playlist_names = {x['name']:x['id'] for x in self.get_user_playlists()}
+        if playlist_name in playlist_names.keys():
+            self.write_playlist_tracks(playlist_names[playlist_name], tracks)
+        else:
+            l.debug("Playlist not found, skipping write.")
+
+    def create_many_playlists(self, playlist_configs: List[Dict]):
+        """
+        Creates playlists in the users account. The playlist Config
+        must contain the kwargs for playlist creation
+        """
+
+        for playlist_config in playlist_configs:
+            self._sp.user_playlist_create(user=self.__user_id, **playlist_config)
+
+    def get_user_playlists(self):
+        """
+        Returns a list of Playlist Ids on the users account
+        """
+
+        response = self._sp.current_user_playlists()
+        result = response['items']
+
+        counter = 1
+        while response['next'] is not None:
+            response = self._sp.current_user_playlists(offset=counter)
+            result.extend(response['items'])
+            counter += 1
+
+        return result
 
 @dataclass
 class StormClient:
@@ -189,7 +225,7 @@ class StormClient:
 
         # Get All artist info
         result = []
-        for batch in batches:
+        for i, batch in enumerate(batches):
 
             l.debug(f"Getting Artist Info, batch {i}/{num_batches}")
 

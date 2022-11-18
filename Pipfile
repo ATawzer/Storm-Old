@@ -21,6 +21,8 @@ lightgbm = "*"
 shortuuid = "*"
 lazypredict = "*"
 scikit-learn = "*"
+matplotlib = "*"
+plotly = "*"
 
 [dev-packages]
 

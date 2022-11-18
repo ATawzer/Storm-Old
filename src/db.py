@@ -23,16 +23,19 @@ class StormDB:
     needed for storm operations and machine learning.
     """
 
-    def __init__(self):
+    def __init__(self, mongo_client=None):
 
         # Build mongo client and db
-        self._mc = MongoClient(
-            os.getenv("mongo_host"),
-            username=os.getenv("mongo_user"),
-            password=os.getenv("mongo_pass"),
-            authSource=os.getenv("mongo_db"),
-            authMechanism="SCRAM-SHA-256",
-        )
+        if mongo_client is None:
+            self._mc = MongoClient(
+                os.getenv("mongo_host"),
+                username=os.getenv("mongo_user"),
+                password=os.getenv("mongo_pass"),
+                authSource=os.getenv("mongo_db"),
+                authMechanism="SCRAM-SHA-256",
+            )
+        else:
+            self._mc = mongo_client
         self._db = self._mc[os.getenv("mongo_db")]
 
         # initialize collections
@@ -131,7 +134,7 @@ class StormDB:
         else:
             return [x["_id"] for x in r]
 
-    def get_playlist_current_info(self, playlist_id: int) -> Dict:
+    def get_playlist_current_info(self, playlist_id: str) -> Dict:
         """
         Returns a playlists full current record (excluding changelog)
         """
@@ -144,7 +147,7 @@ class StormDB:
         else:
             return r[0]
 
-    def get_playlist_changelog(self, playlist_id: int) -> Dict:
+    def get_playlist_changelog(self, playlist_id: str) -> Dict:
         """
         Returns a playlists changelog, a dictionary where each entry is a date.
         """
@@ -162,7 +165,7 @@ class StormDB:
                     f"No changelog found for {playlist_id}, has it been collected more than once?"
                 )
 
-    def get_playlist_collection_date(self, playlist_id: int) -> str:
+    def get_playlist_collection_date(self, playlist_id: str) -> str:
         """
         Gets a playlists last collection date.
         """
@@ -178,7 +181,7 @@ class StormDB:
         else:
             raise Exception("Playlist Ambiguous, should be unique to table.")
 
-    def get_loaded_playlist_tracks(self, playlist_id: int) -> List[str]:
+    def get_loaded_playlist_tracks(self, playlist_id: str) -> List[str]:
         """
         Returns a playlists most recently collected tracks
         """
@@ -191,7 +194,7 @@ class StormDB:
         else:
             return r[0]["tracks"]
 
-    def get_loaded_playlist_artists(self, playlist_id: int) -> List[str]:
+    def get_loaded_playlist_artists(self, playlist_id: str) -> List[str]:
         """
         Returns a playlists most recently collected artists
         """
@@ -433,12 +436,12 @@ class StormDB:
         Get all tracks that need audio analysis added.
         """
         
+        l.debug("Finding Tracks without audio analysis, this can take some time.")
         q = {}
         cols = {"_id": 1, "audio_analysis_flag": 1}
         r = list(self._tracks.find(q, cols))
 
         # Only append artists who need collection in result
-        l.debug("Finding Tracks without audio analysis, this can take some time.")
         result = []
         for track in r:
             if "audio_analysis_flag" not in track.keys():
@@ -497,6 +500,16 @@ class StormDB:
             result.extend(r)
 
         return result
+
+    def get_tracks_from_artists(self, artists: List[str], start_date: str, end_date: str) -> List[str]:
+        """
+        Returns all tracks in database from a list of artists and a date range for releases.
+        """
+        
+        albums = self.get_albums_from_artists_by_date(artists, start_date, end_date)
+        tracks = np.unique(self.get_tracks_from_albums(albums)).tolist()
+        
+        return tracks
 
     # Track Write Endpoints
     def update_tracks(self, track_info_list: List[Dict]) -> None:
