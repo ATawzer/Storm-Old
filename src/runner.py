@@ -179,7 +179,7 @@ class StormRunner:
     """
     Orchestrates a storm run
     """
-    def __init__(self, storm_name, start_date=None, ignore_rerelease=True):
+    def __init__(self, storm_name, start_date=None, ignore_rerelease=True, model_name='', model_friendly_name=''):
 
         l.info(f"Initializing Runner for {storm_name}")
         self.sdb = StormDB()
@@ -188,7 +188,6 @@ class StormRunner:
         self.suc = StormUserClient(self.config['user_id'])
         self.name = storm_name
         self.start_date = start_date
-        #self.wb = WeatherBoy(self.sdb)
         self.ignore_rerelease = ignore_rerelease
 
         # metadata
@@ -197,6 +196,8 @@ class StormRunner:
                            'storm_name':self.name,
                            'run_date':self.run_date,
                            'start_date':self.start_date,
+                           'model':model_name,
+                           'model_friendly':model_friendly_name,
                            'playlists':[],
                            'input_tracks':[], # Determines what gets collected
                            'input_artists':[], # Determines what gets collected, also 'egligible' artists
@@ -237,7 +238,7 @@ class StormRunner:
         self.filter_storm_tracks()
 
         l.info(f"{self.name} - Step 6 / 8 - Handing off to Weatherboy . . . ")
-        #self.call_weatherboy()
+        self.call_weatherboy()
 
         l.info(f"{self.name} - Step 7 / 8 - Writing to Spotify . . .")
         self.write_storm_tracks()
@@ -401,7 +402,13 @@ class StormRunner:
         Run Modeling process
         """
 
-        self.run_record['storm_tracks'] = self.wb.rank_tracks(self.run_record['storm_tracks'], self.config['good_targets'], self.config['great_targets'])
+        wb = WeatherBoy(
+            sdb=self.sdb, 
+            model_name=self.run_record['model'], 
+            model_dir='./models',
+            friendly_name=self.run_record['model_friendly'],
+        )
+        wb.run(self.run_record['storm_tracks'])
 
     def write_storm_tracks(self):
         """

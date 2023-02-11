@@ -417,19 +417,12 @@ class StormDB:
         Get all tracks that need audio features added.
         """
 
-        q = {}
+        q = {"audio_features":None}
         cols = {"_id": 1, "audio_features": 1}
         r = list(self._tracks.find(q, cols))
 
         # Only append artists who need collection in result
-        result = []
-        for track in r:
-            if "audio_features" not in track.keys():
-                result.append(track["_id"])
-            else:
-                if not track["audio_features"]:
-                    result.append(track["_id"])
-        return result
+        return [x["_id"] for x in r]
 
     def get_tracks_for_audio_analysis(self) -> List[str]:
         """
