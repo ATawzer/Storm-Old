@@ -13,9 +13,6 @@ pyssl = "*"
 python-dotenv = "*"
 tqdm = "*"
 pyodbc = "*"
-mysql-connector-python = "*"
-sqlalchemy = "*"
-pymysql = "*"
 cryptography = "*"
 lightgbm = "*"
 shortuuid = "*"
@@ -23,8 +20,12 @@ lazypredict = "*"
 scikit-learn = "*"
 matplotlib = "*"
 plotly = "*"
+requests = "*"
 
 [dev-packages]
+pytest = "*"
+pytest-cov = "*"
+invoke = "*"
 
 [requires]
 python_version = "3.9"
