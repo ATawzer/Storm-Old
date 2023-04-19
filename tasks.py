@@ -1,5 +1,6 @@
 import sys
 import logging
+import subprocess
 
 # Internal
 from invoke import task
@@ -55,7 +56,12 @@ def run_all(c):
     Run all the configured storms, turning on the mongo server and shutting it down when done.
     """
 
-    c.run('mongod')
+    # Start the MongoDB server in a separate terminal or process
+    if sys.platform == "win32":
+        subprocess.Popen(["start", "cmd", "/k", "mongod", "--dbpath", "C:/data/db"], shell=True)
+    else:
+        subprocess.Popen(["gnome-terminal", "--", "mongod", "--dbpath", "C:/data/db"])
+
     setup_logging(c)
     for storm_name in STORM_CONFIG:
         run(c, storm_name)
