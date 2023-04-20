@@ -25,4 +25,11 @@ def test_get_track_info(storm_db):
     assert info[0]['name'] == 'The Way You Make Me Feel'
     assert info[0]['artists'] == ['Michael Jackson']
     assert info[0]['album_id'] == '5f4f4f4f4f4f4f4f4f4f4f4f'
+
+def test_remove_albums(storm_db):
+    storm_db.remove_albums(['5f4f4f4f4f4f4f4f4f4f4f4f'])
+
+    info = storm_db.get_album_info(['5f4f4f4f4f4f4f4f4f4f4f4f'], fields={'_id': 1})
+
+    assert info == []
     

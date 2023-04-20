@@ -410,6 +410,14 @@ class StormDB:
 
             self._albums.update_one(q, {"$set": album}, upsert=True)
 
+    def remove_albums(self, album_ids: List[str]) -> None:
+        """
+        Removes albums from db
+        """
+        
+        q = {"_id": {"$in": album_ids}}
+        self._albums.delete_many(q)
+
     # Track Read Endpoints
     def get_tracks_for_feature_collection(self) -> List[str]:
         """
