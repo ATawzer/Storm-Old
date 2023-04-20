@@ -11,11 +11,11 @@ from storm.modeling import *
 # Make sure to add the models you want here
 STORM_CONFIG = {
     'film_vg_instrumental_v2': {
-        'model_name': 'film_vg_instrumental__distinct__track_feature__12__cdcc6394-52fb-4a07-a645-4c1e52156afe',
+        'model_name': 'film_vg_instrumental__distinct__track_feature__6__3c773dc6-2a8a-40bf-9180-7b3c7b1cf27a',
         'model_friendly_name': '{cluster_number} - Film, VG and Instrumental'
     },
     'contemporary_lyrical_v2': {
-        'model_name': 'contemporary_lyrical__distinct__track_feature__12__00cce27b-ee65-451a-bb11-104b47a2c80f',
+        'model_name': 'contemporary_lyrical__distinct__track_feature__6__93ec10aa-8f91-4547-863b-8aad37614c8f',
         'model_friendly_name': '{cluster_number} - Contemporary Lyrical'
     },
 }
@@ -54,6 +54,8 @@ def run(c, storm_name):
 def run_all(c):
     """
     Run all the configured storms, turning on the mongo server and shutting it down when done.
+
+    This is the main entry point for the project
     """
 
     # Start the MongoDB server in a separate terminal or process
