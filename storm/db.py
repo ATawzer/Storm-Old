@@ -396,19 +396,20 @@ class StormDB:
         return result
 
     # Album Write Endpoints
-    def update_albums(self, album_info: Dict) -> None:
+    def update_albums(self, album_info: List) -> None:
         """
         update album info if needed.
         """
 
         for album in album_info:
-            q = {"_id": album["id"]}
+            if isinstance(album, dict):
+                q = {"_id": album["id"]}
 
-            # Writing updates (formatting changes)
-            album["last_updated"] = dt.datetime.now().strftime("%Y-%m-%d")
-            del album["id"]
+                # Writing updates (formatting changes)
+                album["last_updated"] = dt.datetime.now().strftime("%Y-%m-%d")
+                del album["id"]
 
-            self._albums.update_one(q, {"$set": album}, upsert=True)
+                self._albums.update_one(q, {"$set": album}, upsert=True)
 
     def remove_albums(self, album_ids: List[str]) -> None:
         """

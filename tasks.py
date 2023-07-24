@@ -11,11 +11,11 @@ from storm.modeling import *
 # Make sure to add the models you want here
 STORM_CONFIG = {
     'film_vg_instrumental_v2': {
-        'model_name': 'film_vg_instrumental__distinct__track_feature__6__3c773dc6-2a8a-40bf-9180-7b3c7b1cf27a',
+        'model_name': 'film_vg_instrumental__distinct__track_feature__8__d9a37891-b219-4fb6-b764-5028f189d117',
         'model_friendly_name': '{cluster_number} - Film, VG and Instrumental'
     },
     'contemporary_lyrical_v2': {
-        'model_name': 'contemporary_lyrical__distinct__track_feature__6__93ec10aa-8f91-4547-863b-8aad37614c8f',
+        'model_name': 'contemporary_lyrical__distinct__track_feature__8__8b53daac-aa99-4442-a5cb-e309dab7e468',
         'model_friendly_name': '{cluster_number} - Contemporary Lyrical'
     },
 }

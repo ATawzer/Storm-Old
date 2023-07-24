@@ -205,7 +205,7 @@ class StormClient:
             response = self.sp.tracks(batch, market="US")["tracks"]
 
             # Extend the artists array with all of the artists on the tracks
-            [artists.extend(x["artists"]) for x in response]
+            [artists.extend(x["artists"]) for x in response if x is not None]
 
         # Filter to just ids and unique artists
         return np.unique([x["id"] for x in artists]).tolist()
@@ -295,7 +295,11 @@ class StormClient:
 
         # Remove all other info about artists except ids
         for i in range(len(result)):
-            result[i]["artists"] = [x["id"] for x in result[i]["artists"]]
+            try:
+                result[i]["artists"] = [x["id"] for x in result[i]["artists"]]
+            except:
+                continue
+                # print("No artists found for album: ", result[i])
 
         return result
 

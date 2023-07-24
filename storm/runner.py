@@ -174,7 +174,6 @@ class FakeRunner:
         self.print(f"Starting Track Amount: {len(self.run_record['eligible_tracks'])}")
         self.print(f"Ending Track Amount: {len(self.run_record['storm_tracks'])}")
 
-
 class StormRunner:
     """
     Orchestrates a storm run
