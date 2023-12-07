@@ -58,12 +58,6 @@ def run_all(c):
     This is the main entry point for the project
     """
 
-    # Start the MongoDB server in a separate terminal or process
-    if sys.platform == "win32":
-        subprocess.Popen(["start", "cmd", "/k", "mongod", "--dbpath", "C:/data/db"], shell=True)
-    else:
-        subprocess.Popen(["gnome-terminal", "--", "mongod", "--dbpath", "C:/data/db"])
-
     setup_logging(c)
     for storm_name in STORM_CONFIG:
         run(c, storm_name)
