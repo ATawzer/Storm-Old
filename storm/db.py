@@ -592,7 +592,7 @@ class StormDB:
         cols = {"_id": 1, "added_to_artists": 1, "artists": 1}
         r = list(self._albums.find(q, cols))
 
-        for album in tqdm(r):
+        for album in r:
 
             if "added_to_artists" not in album.keys():
                 for artist in album["artists"]:
